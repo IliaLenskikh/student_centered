@@ -1,10 +1,10 @@
 # OGE English Prep AI
 
-A comprehensive, interactive web application designed to help students prepare for the **OGE (Basic State Exam) in English**. The platform connects students and teachers, offering practice materials for all exam sections with AI-powered feedback.
+A comprehensive, interactive web application designed to help students prepare for the **OGE (Basic State Exam) in English**. This platform offers practice materials for all exam sections with AI-powered feedback and progress tracking.
 
 ## 🌟 Key Features
 
-### 🎓 Student Mode
+### 🎓 Student-Centered Learning
 *   **Complete Exam Practice**: Covers all sections of the OGE:
     *   **Listening**: Audio tasks with multiple-choice and gap-fill questions. Includes a sticky audio player and transcript toggle.
     *   **Reading**: Matching headings and True/False/Not Stated exercises.
@@ -15,20 +15,12 @@ A comprehensive, interactive web application designed to help students prepare f
         *   *Task 3*: Monologue (guided speaking with timer).
     *   **Writing**: Email drafting with word count limits and task checklists.
 *   **AI Tutor**: Instant explanations for incorrect Grammar and Reading answers powered by **Google Gemini**.
-*   **Homework**: View and complete assignments sent by the teacher.
-*   **Progress Tracking**: Visual indicators for completed tasks.
-
-### 👨‍🏫 Teacher Mode
-*   **Dashboard**: Centralized view to manage students.
-*   **Student Tracking**: Add students by email to track their progress.
-*   **Analytics**: View detailed statistics (completed tasks, average scores).
-*   **Detailed Reports**: Inspect specific student attempts, including listening to their recorded Speaking answers.
-*   **Homework Assignment**: Assign specific exercises with due dates and instructions.
+*   **Progress Tracking**: Visual indicators for completed tasks and AI-generated progress analysis.
+*   **Detailed Review**: Revisit your past attempts and see correct answers for every question.
 
 ### 🛠 Technical Features
 *   **Authentication**: Secure email/password login via Supabase Auth.
-*   **Role Switching**: Easy toggle between Student and Teacher profiles in Settings.
-*   **Real-time Database**: Progress and assignments synced via Supabase.
+*   **Real-time Database**: Progress and results synced via Supabase.
 *   **File Storage**: Audio recordings (Speaking tasks) stored in Supabase Storage.
 *   **Responsive Design**: Mobile-friendly UI built with Tailwind CSS.
 
@@ -38,7 +30,7 @@ A comprehensive, interactive web application designed to help students prepare f
 *   **Styling**: Tailwind CSS
 *   **Backend & Database**: Supabase (PostgreSQL)
 *   **AI Integration**: Google GenAI SDK (Gemini 2.5)
-*   **Icons**: Heroicons (via SVG)
+*   **Icons**: Lucide React
 
 ## 📦 Installation & Setup
 
@@ -73,9 +65,8 @@ A comprehensive, interactive web application designed to help students prepare f
 
 The application requires the following Supabase tables:
 
-*   **`profiles`**: Stores user roles (student/teacher), names, and completed story IDs.
+*   **`profiles`**: Stores user names and completed story IDs.
 *   **`student_results`**: Stores detailed attempts for exercises (score, answers, audio URLs).
-*   **`homework_assignments`**: Links teachers to students with specific tasks and due dates.
 *   **Storage Buckets**:
     *   `audio-responses`: For storing student speaking task recordings.
 
@@ -84,6 +75,7 @@ The application requires the following Supabase tables:
 The app uses `gemini-2.5-flash` to provide context-aware explanations.
 *   **Grammar**: Explains why a specific transformation is required (e.g., Passive Voice, Tense usage).
 *   **Reading**: Explains why a specific heading matches a text or why a statement is True/False based on the text context.
+*   **Progress Analysis**: Analyzes your recent results to identify strengths and weaknesses.
 
 ## 📝 License
 

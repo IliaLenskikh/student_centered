@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '../services/supabaseClient';
-import { UserProfile, UserRole } from '../types';
+import { UserProfile } from '../types';
 import { getErrorMessage } from '../utils/errorHandling';
 import { isTableNotFoundError } from '../services/errorMapper';
 
@@ -13,7 +13,6 @@ interface AuthContextType {
   handleAuth: (email: string, password: string, isLoginMode: boolean) => Promise<void>;
   handleLogout: () => Promise<void>;
   handlePasswordReset: (email: string) => Promise<void>;
-  handleRoleSelection: (role: UserRole) => Promise<void>;
   profileError: string | null;
   retryProfileLoad: () => Promise<void>;
   setAuthError: (msg: string | null) => void;
@@ -90,7 +89,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
              console.warn("Profiles table missing. Running in limited mode.");
              // In dev mode with missing table, we allow access but role selection might fail or be weird.
              // We'll treat it as a new user to allow the app to function partially.
-             setUserProfile({ id: userId, name: '', email: userEmail, teacherEmail: '' });
+             setUserProfile({ id: userId, name: '', email: userEmail });
              return;
          } else {
              throw error;
@@ -108,8 +107,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           id: data.id,
           name: data.full_name || '',
           email: userEmail,
-          teacherEmail: data.teacher_email || '',
-          role: data.role as UserRole,
           completed_stories: data.completed_stories || []
         });
       } else {
@@ -124,9 +121,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (createError) {
             console.error("Failed to create profile", createError);
             // Fallback local state
-            setUserProfile({ id: userId, name: '', email: userEmail, teacherEmail: '', role: 'student' });
+            setUserProfile({ id: userId, name: '', email: userEmail });
         } else {
-            setUserProfile({ id: userId, name: '', email: userEmail, teacherEmail: '', role: 'student' });
+            setUserProfile({ id: userId, name: '', email: userEmail });
         }
       }
     } catch (e: any) {
@@ -186,29 +183,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const handleRoleSelection = async (role: UserRole) => {
-    // Deprecated but kept for interface compatibility if needed, though we force 'student' now.
-    try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) throw new Error("No user found");
-
-        const { error } = await supabase
-            .from('profiles')
-            .upsert({ 
-                id: user.id, 
-                role: 'student', // Force student
-                email: user.email 
-            }, { onConflict: 'id' });
-
-        if (error) throw error;
-
-        setUserProfile((prev) => prev ? { ...prev, id: user.id, role: 'student' } : null);
-    } catch (err: any) {
-        setAuthError(getErrorMessage(err));
-        throw err;
-    }
-  };
-
   const handleLogout = async () => {
     await supabase.auth.signOut();
     setUserProfile(null);
@@ -226,7 +200,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       handleAuth,
       handleLogout,
       handlePasswordReset,
-      handleRoleSelection,
       profileError,
       retryProfileLoad,
       setAuthError,

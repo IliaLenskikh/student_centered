@@ -7,15 +7,9 @@ import {
   ExerciseType, 
   UserProfile, 
   StudentResult, 
-  HomeworkAssignment, 
-  AttemptDetail,
-  UserRole,
-  TrackedStudent
+  AttemptDetail
 } from './types';
-import ExerciseCard from './components/ExerciseCard';
 import ExerciseView from './components/ExerciseView';
-import StudentHomeworkView from './components/StudentHomeworkView';
-import HomeworkModal from './components/HomeworkModal';
 import { AppRouter } from './components/AppRouter';
 import { grammarStories } from './data/grammar';
 import { vocabStories } from './data/vocabulary';
@@ -27,13 +21,11 @@ import { oralStories } from './data/oral';
 import { monologueStories } from './data/monologue';
 import { listeningStories } from './data/listening';
 import { supabase } from './services/supabaseClient';
-import { AuthChangeEvent, Session, RealtimeChannel } from '@supabase/supabase-js';
+import { RealtimeChannel } from '@supabase/supabase-js';
 
 import { useAuth } from './contexts/AuthContext';
 import { useToast } from './contexts/ToastContext';
 import { getErrorMessage } from './utils/errorHandling';
-import { CategoryCard } from './components/CategoryCard';
-import { ExerciseList } from './components/ExerciseList';
 
 const allReadingStories = [...readingStories, ...readingTrueFalseStories];
 const allOralStories = [...oralStories, ...monologueStories];
@@ -65,7 +57,7 @@ export default function App() {
     retryProfileLoad
   } = useAuth();
 
-  const userProfile = authProfile || { name: '', email: '', teacherEmail: '', role: undefined };
+  const userProfile = authProfile || { name: '', email: '' };
 
   const { showToast } = useToast();
   const navigate = useNavigate();
@@ -80,10 +72,6 @@ export default function App() {
   const [newPassword, setNewPassword] = useState(''); 
   const [fullName, setFullName] = useState('');
   const [isLoginMode, setIsLoginMode] = useState(false);
-
-  // Homework state
-  const [myHomework, setMyHomework] = useState<HomeworkAssignment[]>([]);
-  const [homeworkLoading, setHomeworkLoading] = useState(false);
   
   const totalTasks = allStories.length;
 
@@ -103,74 +91,19 @@ export default function App() {
         navigate('/auth');
       }
     } else {
-      // Force student role if missing
-      if (!authProfile.role) {
-         // This should be handled in AuthContext but as a safety net:
-         // We don't redirect to role selection anymore.
-      }
-      
       if (currentPath === '/auth' || currentPath === '/forgot-password') {
         navigate('/');
       }
     }
-  }, [authProfile?.id, authProfile?.role, isAuthChecking, isProfileLoading, navigate, location.pathname]);
+  }, [authProfile?.id, isAuthChecking, isProfileLoading, navigate, location.pathname]);
 
   useEffect(() => {
     if (authProfile?.id) {
       setCompletedStories(new Set(authProfile.completed_stories || []));
-      loadHomework(authProfile.id);
     }
-  }, [authProfile?.id, authProfile?.role]);
+  }, [authProfile?.id]);
 
 
-
-  // Realtime subscription for Students (Homework updates)
-  useEffect(() => {
-    let channel: RealtimeChannel | null = null;
-    if (userProfile.id) {
-        try {
-            channel = supabase
-                .channel('public:homework_assignments')
-                .on('postgres_changes', 
-                    { event: '*', schema: 'public', table: 'homework_assignments', filter: `student_id=eq.${userProfile.id}` }, 
-                    () => {
-                        loadHomework(userProfile.id!); 
-                        showToast("Homework updated!", "info");
-                    }
-                )
-                .subscribe();
-        } catch (e) {
-            console.error("Realtime subscription error:", e);
-        }
-    }
-    return () => {
-        if (channel) supabase.removeChannel(channel);
-    };
-  }, [userProfile.id]);
-
-  const loadHomework = async (studentId: string) => {
-      setHomeworkLoading(true);
-      try {
-          const { data, error } = await supabase
-              .from('homework_assignments')
-              .select('*')
-              .eq('student_id', studentId);
-          
-          if (error) {
-              if (isTableNotFoundError(error)) {
-                  console.warn("Homework table missing. SQL setup required.");
-              }
-              return;
-          }
-          if (data) {
-              setMyHomework(data as HomeworkAssignment[]);
-          }
-      } catch (e) {
-          console.error("Homework load failed:", e);
-      } finally {
-          setHomeworkLoading(false);
-      }
-  };
 
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -210,14 +143,12 @@ export default function App() {
           .from('profiles')
           .upsert({
             id: user.id,
-            full_name: userProfile.name,
-            teacher_email: userProfile.teacherEmail,
-            role: userProfile.role 
+            full_name: userProfile.name
           }, { onConflict: 'id' });
 
         if (error) throw error;
 
-        setUserProfile(prev => prev ? { ...prev, name: userProfile.name, teacherEmail: userProfile.teacherEmail } : null);
+        setUserProfile(prev => prev ? { ...prev, name: userProfile.name } : null);
 
         if (newPassword) {
             const { error: pwdError } = await supabase.auth.updateUser({ password: newPassword });
@@ -257,33 +188,6 @@ export default function App() {
                 max_score: maxScore,
                 details: details
             });
-            
-            const assignment = myHomework.find(h => 
-                h.exercise_title === title && 
-                h.exercise_type === type && 
-                h.status !== 'completed'
-            );
-
-            if (assignment) {
-                const { error } = await supabase
-                    .from('homework_assignments')
-                    .update({ 
-                        status: 'completed',
-                        completed_at: new Date().toISOString(),
-                        score: score,
-                        max_score: maxScore
-                    })
-                    .eq('id', assignment.id);
-                
-                if (!error) {
-                    setMyHomework(prev => prev.map(h => 
-                        h.id === assignment.id 
-                            ? { ...h, status: 'completed', score, maxScore, completed_at: new Date().toISOString() } 
-                            : h
-                    ));
-                    showToast("Homework task completed!", "success");
-                }
-            }
         }
       }
     } catch (error) {
@@ -291,8 +195,8 @@ export default function App() {
     }
   };
 
-  const startExercise = (story: Story, type: ExerciseType, source: 'CATALOG' | 'HOMEWORK' = 'CATALOG') => {
-    navigate(`/exercise/${type}/${encodeURIComponent(story.title)}`, { state: { source } });
+  const startExercise = (story: Story, type: ExerciseType) => {
+    navigate(`/exercise/${type}/${encodeURIComponent(story.title)}`);
   };
 
   const goHome = () => {
@@ -310,7 +214,6 @@ export default function App() {
 
   const totalCompleted = completedStories.size;
   const progressPercentage = Math.round((totalCompleted / totalTasks) * 100) || 0;
-  const pendingHomeworkCount = myHomework.filter(h => h.status === 'pending' || (h.status === 'overdue' && new Date() > new Date(h.due_date))).length;
 
   const getCategoryStats = (stories: Story[]) => {
       const total = stories.length;
@@ -394,17 +297,13 @@ export default function App() {
               startExercise={startExercise}
               completedStories={completedStories}
               handleStoryComplete={handleStoryComplete}
-              myHomework={myHomework}
-              homeworkLoading={homeworkLoading}
-              loadHomework={loadHomework}
-              pendingHomeworkCount={pendingHomeworkCount}
               progressPercentage={progressPercentage}
               totalCompleted={totalCompleted}
               totalTasks={totalTasks}
             />
           </div>
 
-          {userProfile.role && !location.pathname.includes('/exercise/') && location.pathname !== '/settings' && location.pathname !== '/auth' && location.pathname !== '/forgot-password' && (
+          {userProfile.id && !location.pathname.includes('/exercise/') && location.pathname !== '/settings' && location.pathname !== '/auth' && location.pathname !== '/forgot-password' && (
              <div className="fixed bottom-6 left-6 z-50">
                  <button 
                     onClick={() => navigate('/settings')}

@@ -4,12 +4,9 @@ import {
   Story, 
   ExerciseType, 
   UserProfile, 
-  HomeworkAssignment, 
   AttemptDetail
 } from '../types';
-import ExerciseCard from './ExerciseCard';
 import ExerciseView from './ExerciseView';
-import StudentHomeworkView from './StudentHomeworkView';
 import { StudentDashboard } from './StudentDashboard';
 import { grammarStories } from '../data/grammar';
 import { vocabStories } from '../data/vocabulary';
@@ -60,15 +57,9 @@ interface AppRouterProps {
   
   // Navigation/Exercise props
   goHome: () => void;
-  startExercise: (story: Story, type: ExerciseType, source?: 'CATALOG' | 'HOMEWORK') => void;
+  startExercise: (story: Story, type: ExerciseType) => void;
   completedStories: Set<string>;
   handleStoryComplete: (title: string, type: ExerciseType, score: number, maxScore: number, details: AttemptDetail[]) => Promise<void>;
-  
-  // Homework props
-  myHomework: HomeworkAssignment[];
-  homeworkLoading: boolean;
-  loadHomework: (studentId: string) => Promise<void>;
-  pendingHomeworkCount: number;
   
   // Stats
   progressPercentage: number;
@@ -126,8 +117,7 @@ const ExerciseRouteWrapper: React.FC<AppRouterProps> = (props) => {
       story={story} 
       type={exerciseType}
       onBack={() => {
-        if (source === 'HOMEWORK') navigate('/homework');
-        else navigate(`/exercise/${type}`);
+        navigate(`/exercise/${type}`);
       }}
       onComplete={(score, maxScore, details) => props.handleStoryComplete(story.title, exerciseType, score, maxScore, details)}
       userProfile={props.userProfile}
@@ -161,10 +151,6 @@ export const AppRouter: React.FC<AppRouterProps> = (props) => {
     startExercise,
     completedStories,
     handleStoryComplete,
-    myHomework,
-    homeworkLoading,
-    loadHomework,
-    pendingHomeworkCount,
     progressPercentage,
     totalCompleted,
     totalTasks
@@ -341,18 +327,6 @@ export const AppRouter: React.FC<AppRouterProps> = (props) => {
                 />
               </div>
               
-              {userProfile.role === 'student' && (
-                  <div>
-                    <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Teacher's Email (for reports)</label>
-                    <input 
-                      type="email" 
-                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-indigo-500 outline-none font-medium"
-                      value={userProfile.teacherEmail}
-                      onChange={(e) => setUserProfile({...userProfile, teacherEmail: e.target.value})}
-                    />
-                  </div>
-              )}
-
               <div className="pt-4 border-t border-slate-100">
                   <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Change Password</label>
                   <input 
@@ -397,26 +371,12 @@ export const AppRouter: React.FC<AppRouterProps> = (props) => {
                     totalTasks: totalTasks
                 }}
                 completedStories={completedStories}
-                homework={{
-                    pendingCount: pendingHomeworkCount
-                }}
                 onNavigate={{
-                    toHomework: () => navigate('/homework'),
                     toCategory: (type) => navigate(`/exercise/${type}`)
                 }}
             />
           </div>
         )
-      } />
-
-      <Route path="/homework" element={
-        <StudentHomeworkView 
-            assignments={myHomework}
-            onStartExercise={(story, type) => startExercise(story, type, 'HOMEWORK')}
-            onBack={goHome}
-            onRefresh={() => userProfile.id && loadHomework(userProfile.id)}
-            loading={homeworkLoading}
-        />
       } />
 
       <Route path="/exercise/grammar" element={renderExerciseList(grammarStories, ExerciseType.GRAMMAR)} />

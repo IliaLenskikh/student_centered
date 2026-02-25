@@ -185,7 +185,7 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
 
   useEffect(() => {
     // Only broadcast if user is a student and has a profile
-    if (typeof window !== 'undefined' && userProfile?.role === 'student' && userProfile.id) {
+    if (typeof window !== 'undefined' && userProfile?.id) {
         const channel = supabase.channel('live_sessions_all');
         
         channel.subscribe(async (status) => {
@@ -1132,7 +1132,7 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
 
                    <div className="relative group h-full flex flex-col">
                       <div className="mb-2 text-xs text-slate-400 flex justify-between items-center">
-                         <span>To: {userProfile?.teacherEmail || 'Teacher'}</span>
+                         <span>To: Teacher</span>
                          {!readOnly && (
                              <div className="flex gap-2">
                                 <button onClick={() => handleGetWritingSuggestion('greeting')} className="text-indigo-500 hover:text-indigo-700 font-bold text-[10px] uppercase tracking-wide bg-indigo-50 hover:bg-indigo-100 px-2 py-1 rounded transition-colors">Greeting</button>

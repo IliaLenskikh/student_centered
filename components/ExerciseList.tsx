@@ -6,7 +6,7 @@ interface ExerciseListProps {
   stories: Story[];
   type: ExerciseType;
   completedStories: Set<string>;
-  onStartExercise: (story: Story, type: ExerciseType, source: 'CATALOG' | 'HOMEWORK') => void;
+  onStartExercise: (story: Story, type: ExerciseType) => void;
   onGoHome: () => void;
   readOnly?: boolean;
 }
@@ -85,7 +85,7 @@ export const ExerciseList: React.FC<ExerciseListProps> = ({
               <ExerciseCard
                 story={story}
                 type={type}
-                onClick={() => onStartExercise(story, type, 'CATALOG')}
+                onClick={() => onStartExercise(story, type)}
                 isCompleted={isCompleted}
                 readOnly={readOnly}
               />

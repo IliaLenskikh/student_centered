@@ -87,14 +87,10 @@ export interface ValidationState {
   [key: string]: boolean | null; // true = correct, false = incorrect, null = unmatched
 }
 
-export type UserRole = 'student' | 'teacher';
-
 export interface UserProfile {
   id?: string;
   name: string;
   email: string;
-  teacherEmail: string;
-  role?: UserRole;
   completed_stories?: string[];
 }
 
@@ -109,15 +105,6 @@ export interface AttemptDetail {
   wordCount?: number; // Word count for writing tasks
 }
 
-export interface TeacherFeedback {
-  id: string;
-  attempt_id: string;
-  teacher_id: string;
-  feedback_text: string;
-  audio_score?: number;
-  created_at: string;
-}
-
 export interface StudentResult {
   id: string;
   student_id: string;
@@ -127,55 +114,8 @@ export interface StudentResult {
   max_score: number;
   details: AttemptDetail[];
   created_at: string;
-  feedback?: TeacherFeedback; // Optional joined feedback
   student_name?: string; // For dashboard display
   student_email?: string; // For dashboard display
-}
-
-export interface HomeworkAssignment {
-  id: string;
-  teacher_id: string;
-  student_id: string;
-  exercise_title: string;
-  exercise_type: ExerciseType;
-  due_date: string;
-  status: 'pending' | 'completed' | 'overdue';
-  instructions?: string;
-  created_at: string;
-  completed_at?: string;
-  score?: number;
-  max_score?: number;
-}
-
-export interface LiveSession {
-  studentId: string;
-  studentName: string;
-  exerciseTitle: string;
-  exerciseType: ExerciseType;
-  currentQuestion: string;
-  userInput: string;
-  allAnswers: Record<string, string>; // Tracks ALL inputs, not just current one
-  isCorrect: boolean | null;
-  progressPercentage: number;
-  startedAt: string;
-  lastActivity: number;
-}
-
-export interface OnlineUser {
-  id: string;
-  name: string;
-  role: string;
-  online_at: string;
-}
-
-export interface TrackedStudent {
-  id: string;
-  email: string;
-  name: string;
-  completedCount: number;
-  totalTasks: number;
-  pendingHomeworkCount?: number;
-  isOnline?: boolean;
 }
 
 export interface ToastMsg {

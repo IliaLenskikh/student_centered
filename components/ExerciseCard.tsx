@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React from 'react';
 import { Story, ExerciseType } from '../types';
 
 interface ExerciseCardProps {
@@ -7,14 +7,10 @@ interface ExerciseCardProps {
   type: ExerciseType;
   onClick: () => void;
   isCompleted?: boolean;
-  onAssign?: () => void; // Optional: Only for teachers (when student selected)
-  isTeacher?: boolean;   // New prop to determine if we should show the disabled assign button
   readOnly?: boolean;
 }
 
-const ExerciseCard: React.FC<ExerciseCardProps> = ({ story, type, onClick, isCompleted, onAssign, isTeacher, readOnly }) => {
-  const [isAssigning, setIsAssigning] = useState(false);
-  const [justAssigned, setJustAssigned] = useState(false);
+const ExerciseCard: React.FC<ExerciseCardProps> = ({ story, type, onClick, isCompleted, readOnly }) => {
 
   const getBadgeStyle = () => {
     switch(type) {
@@ -40,22 +36,6 @@ const ExerciseCard: React.FC<ExerciseCardProps> = ({ story, type, onClick, isCom
     }
     return story.template && story.template.length > 0 ? story.template[0].replace(/\{0\}/g, '...') : "Exercise details...";
   }
-
-  const handleAssignClick = async (e: React.MouseEvent) => {
-      e.stopPropagation();
-      if (onAssign) {
-          setIsAssigning(true);
-          try {
-            await onAssign();
-            setJustAssigned(true);
-            setTimeout(() => setJustAssigned(false), 2000);
-          } catch (error) {
-            console.error(error);
-          } finally {
-            setIsAssigning(false);
-          }
-      }
-  };
 
   const badgeStyle = getBadgeStyle();
 
@@ -92,40 +72,7 @@ const ExerciseCard: React.FC<ExerciseCardProps> = ({ story, type, onClick, isCom
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
             5-10 min
          </span>
-         
-         <div className="flex items-center gap-3">
-            {(onAssign || isTeacher) && (
-              <button 
-                onClick={onAssign ? handleAssignClick : (e) => e.stopPropagation()}
-                disabled={!onAssign || isAssigning || justAssigned}
-                className={`z-10 flex items-center gap-1 px-3 py-1.5 rounded-lg transition-all font-bold whitespace-nowrap border ${
-                    !onAssign 
-                    ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed opacity-60' 
-                    : justAssigned 
-                        ? 'bg-emerald-100 text-emerald-700 border-emerald-200' 
-                        : 'bg-indigo-100 text-indigo-700 border-indigo-200 hover:bg-indigo-200 cursor-pointer'
-                }`}
-                title={!onAssign ? "Select a student first" : "Assign as Homework"}
-              >
-                {isAssigning ? (
-                    <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                ) : justAssigned ? (
-                    <>
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-                    Added
-                    </>
-                ) : !onAssign ? (
-                    <>
-                    Select student first
-                    </>
-                ) : (
-                    <>
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
-                    Add to HW
-                    </>
-                )}
-              </button>
-            )}
+          <div className="flex items-center gap-3">
             <button 
                 onClick={onClick}
                 className="group-hover:translate-x-1 transition-transform text-indigo-500 font-bold opacity-0 group-hover:opacity-100 flex items-center gap-1"

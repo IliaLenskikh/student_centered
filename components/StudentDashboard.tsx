@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { UserProfile, HomeworkAssignment, Story, ExerciseType } from '../types';
+import { UserProfile, Story, ExerciseType } from '../types';
 import { CategoryCard } from './CategoryCard';
 import { grammarStories } from '../data/grammar';
 import { vocabStories } from '../data/vocabulary';
@@ -20,11 +20,7 @@ interface StudentDashboardProps {
     totalCompleted: number;
     totalTasks: number;
   };
-  homework: {
-    pendingCount: number;
-  };
   onNavigate: {
-    toHomework: () => void;
     toCategory: (type: string) => void;
   };
   readOnly?: boolean;
@@ -34,7 +30,6 @@ interface StudentDashboardProps {
 export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   userProfile,
   stats,
-  homework,
   onNavigate,
   readOnly,
   completedStories
@@ -157,7 +152,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
             Hello, {userProfile.name || 'Student'}!
             </h1>
             <p className="text-lg text-slate-500 max-w-2xl mx-auto">
-            Ready to master your English skills? Choose a category below or check your homework.
+            Ready to master your English skills? Choose a category below to get started.
             </p>
         </div>
 
@@ -189,20 +184,6 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                         <div className="text-xs text-slate-400">AI Analysis</div>
                     </div>
                 </button>
-                
-                <div 
-                    onClick={onNavigate.toHomework}
-                    className={`flex items-center gap-4 bg-gradient-to-r from-indigo-500 to-purple-600 text-white p-4 rounded-2xl shadow-lg hover:scale-105 transition-transform cursor-pointer`}
-                >
-                    <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
-                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
-                    </div>
-                    <div>
-                        <div className="font-bold text-lg">Homework</div>
-                        <div className="text-indigo-100 text-sm">{homework.pendingCount} tasks pending</div>
-                    </div>
-                    <svg className="w-5 h-5 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
-                </div>
             </div>
         </div>
 
@@ -277,16 +258,6 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 icon={<svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" /></svg>}
                 readOnly={readOnly}
             />
-        </div>
-
-        <div className="mt-16 text-center">
-            <a 
-                href={`mailto:${userProfile.teacherEmail || 'teacher@example.com'}?subject=Question from ${userProfile.name}`}
-                className="inline-flex items-center gap-2 text-slate-400 hover:text-indigo-600 transition-colors font-medium text-sm px-4 py-2 rounded-full hover:bg-slate-100"
-            >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
-                Contact Teacher
-            </a>
         </div>
     </div>
   );
