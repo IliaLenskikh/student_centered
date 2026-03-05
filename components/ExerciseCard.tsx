@@ -6,12 +6,13 @@ interface ExerciseCardProps {
   story: Story;
   type: ExerciseType;
   onClick: () => void;
+  onRetry?: () => void;
   isCompleted?: boolean;
   result?: StudentResult;
   readOnly?: boolean;
 }
 
-const ExerciseCard: React.FC<ExerciseCardProps> = ({ story, type, onClick, isCompleted, result, readOnly }) => {
+const ExerciseCard: React.FC<ExerciseCardProps> = ({ story, type, onClick, onRetry, isCompleted, result, readOnly }) => {
 
   const getThemeColors = () => {
     if (isCompleted) {
@@ -159,6 +160,17 @@ const ExerciseCard: React.FC<ExerciseCardProps> = ({ story, type, onClick, isCom
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                 Score: {result.score} / {result.max_score}
              </span>
+             {onRetry && (
+                 <button 
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onRetry();
+                    }}
+                    className="text-xs font-bold text-slate-400 hover:text-slate-600 uppercase tracking-wider transition-colors px-2 py-1"
+                 >
+                    Do Again
+                 </button>
+             )}
           </div>
       )}
     </div>

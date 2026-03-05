@@ -7,7 +7,7 @@ interface ExerciseListProps {
   type: ExerciseType;
   completedStories: Set<string>;
   userResults: Record<string, StudentResult>;
-  onStartExercise: (story: Story, type: ExerciseType) => void;
+  onStartExercise: (story: Story, type: ExerciseType, mode?: 'review' | 'retry') => void;
   onGoHome: () => void;
   readOnly?: boolean;
 }
@@ -82,14 +82,18 @@ export const ExerciseList: React.FC<ExerciseListProps> = ({
         {stories.map((story, idx) => {
           const isCompleted = completedStories.has(story.title);
           const result = userResults[story.title];
+          
+          // Only treat as completed if we have the result data to show the score
+          const showAsCompleted = isCompleted && !!result;
 
           return (
             <div key={idx} className={`relative rounded-2xl transition-all`}>
               <ExerciseCard
                 story={story}
                 type={type}
-                onClick={() => onStartExercise(story, type)}
-                isCompleted={isCompleted}
+                onClick={() => onStartExercise(story, type, 'review')}
+                onRetry={() => onStartExercise(story, type, 'retry')}
+                isCompleted={showAsCompleted}
                 result={result}
                 readOnly={readOnly}
               />

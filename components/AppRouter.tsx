@@ -57,7 +57,7 @@ interface AppRouterProps {
   
   // Navigation/Exercise props
   goHome: () => void;
-  startExercise: (story: Story, type: ExerciseType) => void;
+  startExercise: (story: Story, type: ExerciseType, mode?: 'review' | 'retry') => void;
   completedStories: Set<string>;
   userResults: Record<string, StudentResult>;
   handleStoryComplete: (title: string, type: ExerciseType, score: number, maxScore: number, details: AttemptDetail[]) => Promise<void>;
@@ -77,17 +77,22 @@ const ExerciseRouteWrapper: React.FC<AppRouterProps> = (props) => {
   const navigate = useNavigate();
   const location = useLocation();
   const source = location.state?.source || 'CATALOG';
+  const mode = location.state?.mode || 'review';
 
   const decodedTitle = decodeURIComponent(title || '');
   const exerciseType = type as ExerciseType;
   
   const story = allStories.find(s => s.title === decodedTitle && s.type === exerciseType);
 
-  const [previousResult, setPreviousResult] = useState<StudentResult | null>(null);
+  const [history, setHistory] = useState<StudentResult[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(true);
 
   useEffect(() => {
-      const fetchResult = async () => {
-          if (!props.userProfile?.id || !story) return;
+      const fetchHistory = async () => {
+          if (!props.userProfile?.id || !story) {
+              setLoadingHistory(false);
+              return;
+          }
           
           const targetStudentId = props.userProfile.id;
 
@@ -97,21 +102,34 @@ const ExerciseRouteWrapper: React.FC<AppRouterProps> = (props) => {
               .eq('student_id', targetStudentId)
               .eq('exercise_title', story.title)
               .eq('exercise_type', exerciseType)
-              .order('created_at', { ascending: false })
-              .limit(1)
-              .single();
+              .order('created_at', { ascending: false });
           
           if (data) {
-              setPreviousResult(data as StudentResult);
+              setHistory(data as StudentResult[]);
           } else {
-              setPreviousResult(null);
+              setHistory([]);
           }
+          setLoadingHistory(false);
       };
       
-      fetchResult();
+      fetchHistory();
   }, [story, exerciseType, props.userProfile.id]);
 
   if (!story) return <div className="p-8 text-center text-slate-500">Story not found</div>;
+  
+  if (loadingHistory) {
+      return (
+          <div className="min-h-screen flex items-center justify-center bg-slate-50">
+              <div className="flex flex-col items-center gap-4">
+                  <svg className="animate-spin h-8 w-8 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  <p className="text-slate-500 font-medium">Loading exercise history...</p>
+              </div>
+          </div>
+      );
+  }
 
   return (
     <ExerciseView 
@@ -123,7 +141,8 @@ const ExerciseRouteWrapper: React.FC<AppRouterProps> = (props) => {
       onComplete={(score, maxScore, details) => props.handleStoryComplete(story.title, exerciseType, score, maxScore, details)}
       userProfile={props.userProfile}
       readOnly={false}
-      previousResult={previousResult}
+      history={history}
+      initialMode={mode}
     />
   );
 };
@@ -158,19 +177,7 @@ export const AppRouter: React.FC<AppRouterProps> = (props) => {
     totalTasks
   } = props;
 
-  const renderExerciseList = (stories: Story[], type: ExerciseType) => {
-    return (
-      <ExerciseList 
-        stories={stories} 
-        type={type} 
-        completedStories={completedStories} 
-        userResults={userResults}
-        onStartExercise={startExercise} 
-        onGoHome={goHome} 
-        readOnly={false}
-      />
-    );
-  };
+
 
   return (
     <Routes>
@@ -382,13 +389,83 @@ export const AppRouter: React.FC<AppRouterProps> = (props) => {
         )
       } />
 
-      <Route path="/exercise/grammar" element={renderExerciseList(grammarStories, ExerciseType.GRAMMAR)} />
-      <Route path="/exercise/vocabulary" element={renderExerciseList(vocabStories, ExerciseType.VOCABULARY)} />
-      <Route path="/exercise/reading" element={renderExerciseList(allReadingStories, ExerciseType.READING)} />
-      <Route path="/exercise/listening" element={renderExerciseList(listeningStories, ExerciseType.LISTENING)} />
-      <Route path="/exercise/speaking" element={renderExerciseList(speakingStories, ExerciseType.SPEAKING)} />
-      <Route path="/exercise/oral" element={renderExerciseList(allOralStories, ExerciseType.ORAL_SPEECH)} />
-      <Route path="/exercise/writing" element={renderExerciseList(writingStories, ExerciseType.WRITING)} />
+      <Route path="/exercise/grammar" element={
+        <ExerciseList 
+          stories={grammarStories} 
+          type={ExerciseType.GRAMMAR} 
+          completedStories={completedStories} 
+          userResults={userResults}
+          onStartExercise={startExercise} 
+          onGoHome={goHome} 
+          readOnly={false}
+        />
+      } />
+      <Route path="/exercise/vocabulary" element={
+        <ExerciseList 
+          stories={vocabStories} 
+          type={ExerciseType.VOCABULARY} 
+          completedStories={completedStories} 
+          userResults={userResults}
+          onStartExercise={startExercise} 
+          onGoHome={goHome} 
+          readOnly={false}
+        />
+      } />
+      <Route path="/exercise/reading" element={
+        <ExerciseList 
+          stories={allReadingStories} 
+          type={ExerciseType.READING} 
+          completedStories={completedStories} 
+          userResults={userResults}
+          onStartExercise={startExercise} 
+          onGoHome={goHome} 
+          readOnly={false}
+        />
+      } />
+      <Route path="/exercise/listening" element={
+        <ExerciseList 
+          stories={listeningStories} 
+          type={ExerciseType.LISTENING} 
+          completedStories={completedStories} 
+          userResults={userResults}
+          onStartExercise={startExercise} 
+          onGoHome={goHome} 
+          readOnly={false}
+        />
+      } />
+      <Route path="/exercise/speaking" element={
+        <ExerciseList 
+          stories={speakingStories} 
+          type={ExerciseType.SPEAKING} 
+          completedStories={completedStories} 
+          userResults={userResults}
+          onStartExercise={startExercise} 
+          onGoHome={goHome} 
+          readOnly={false}
+        />
+      } />
+      <Route path="/exercise/oral" element={
+        <ExerciseList 
+          stories={allOralStories} 
+          type={ExerciseType.ORAL_SPEECH} 
+          completedStories={completedStories} 
+          userResults={userResults}
+          onStartExercise={startExercise} 
+          onGoHome={goHome} 
+          readOnly={false}
+        />
+      } />
+      <Route path="/exercise/writing" element={
+        <ExerciseList 
+          stories={writingStories} 
+          type={ExerciseType.WRITING} 
+          completedStories={completedStories} 
+          userResults={userResults}
+          onStartExercise={startExercise} 
+          onGoHome={goHome} 
+          readOnly={false}
+        />
+      } />
 
       <Route path="/exercise/:type/:title" element={<ExerciseRouteWrapper {...props} />} />
 

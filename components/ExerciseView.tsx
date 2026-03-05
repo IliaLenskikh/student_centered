@@ -14,10 +14,11 @@ interface ExerciseViewProps {
   readOnly?: boolean;
   initialInputs?: Record<string, string>;
   isLiveMonitoring?: boolean;
-  previousResult?: StudentResult | null;
+  history?: StudentResult[];
+  initialMode?: 'review' | 'retry';
 }
 
-const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComplete, userProfile, readOnly, initialInputs, isLiveMonitoring, previousResult }) => {
+const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComplete, userProfile, readOnly, initialInputs, isLiveMonitoring, history = [], initialMode = 'review' }) => {
   // --- Safety Guard: Ensure story exists ---
   if (!story) {
     return (
@@ -38,14 +39,47 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
   const [validation, setValidation] = useState<ValidationState>({});
   const [showResults, setShowResults] = useState(false);
   
+  // History / Retry Logic
+  const [viewingResult, setViewingResult] = useState<StudentResult | null>(null);
+  
+  // History Dropdown State
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const historyDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (historyDropdownRef.current && !historyDropdownRef.current.contains(event.target as Node)) {
+        setIsHistoryOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  useEffect(() => {
+      // On mount or history change, decide what to show
+      if (history && history.length > 0) {
+          if (initialMode === 'retry') {
+              setViewingResult(null);
+          } else {
+              setViewingResult(history[0]);
+          }
+      } else {
+          setViewingResult(null);
+      }
+  }, [history, initialMode]);
+
   useEffect(() => {
       if (initialInputs) {
           setInputs(initialInputs);
       }
   }, [initialInputs]);
 
-  // If previousResult is present, we are in review mode
-  const isReviewMode = !!previousResult;
+  // If viewingResult is present, we are in review mode
+  const isReviewMode = !!viewingResult;
   const effectiveReadOnly = readOnly || isReviewMode;
 
   const [score, setScore] = useState(0);
@@ -62,15 +96,15 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
   const [attempts, setAttempts] = useState<{ blob: Blob; url: string; timestamp: string }[]>([]);
   const [selectedAttemptIndex, setSelectedAttemptIndex] = useState<number | null>(null);
 
-  // Populate state from previousResult for Review Mode
+  // Populate state from viewingResult for Review Mode
   useEffect(() => {
-      if (previousResult && previousResult.details) {
+      if (viewingResult && viewingResult.details) {
           const newInputs: UserProgress = {};
           const newValidation: ValidationState = {};
           const newAttempts: { blob: Blob; url: string; timestamp: string }[] = [];
           
           let detailIndex = 0;
-          const details = previousResult.details;
+          const details = viewingResult.details;
 
           // Helper to process a story/substory
           const processStory = (s: Story, prefix: string = '') => {
@@ -95,7 +129,7 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
                           // detail.userAnswer is the label text -> find index
                           const idx = q.options?.findIndex(opt => opt === detail.userAnswer);
                           if (idx !== undefined && idx !== -1) {
-                              newInputs[key] = (idx + 1).toString();
+                               newInputs[key] = (idx + 1).toString();
                           }
                           newValidation[key] = detail.isCorrect;
                       }
@@ -119,7 +153,7 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
                       newAttempts.push({
                           blob: new Blob(), // Dummy blob
                           url: d.audioUrl,
-                          timestamp: new Date(previousResult.created_at).toLocaleTimeString()
+                          timestamp: new Date(viewingResult.created_at).toLocaleTimeString()
                       });
                   }
               });
@@ -137,10 +171,21 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
               setInputs(newInputs);
               setValidation(newValidation);
               setShowResults(true);
-              setScore(previousResult.score);
+              setScore(viewingResult.score);
           }
+      } else if (!viewingResult) {
+          // Reset for new attempt
+          setInputs({});
+          setValidation({});
+          setShowResults(false);
+          setScore(0);
+          setAttempts([]);
+          setSpeakingPhase('IDLE');
+          setEmailContent('');
+          setWordCount(0);
+          setCheckedSections({});
       }
-  }, [previousResult, story, type]);
+  }, [viewingResult, story, type]);
 
   // Interview Specific State
   const [isAudioPlaying, setIsAudioPlaying] = useState(false);
@@ -1880,7 +1925,7 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
 
   return (
     <div className="pb-10">
-      <div className="max-w-7xl mx-auto px-4 py-6 flex items-center justify-between">
+      <div className="max-w-7xl mx-auto px-4 py-6 flex items-center justify-between relative z-50">
         <button onClick={onBack} className="flex items-center text-slate-500 hover:text-slate-800 transition-colors group px-3 py-2 rounded-xl hover:bg-white hover:shadow-sm">
           <div className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center mr-3 group-hover:border-indigo-200 group-hover:text-indigo-600 transition-colors shadow-sm">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
@@ -1890,11 +1935,83 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
         
         <div className="flex items-center gap-4">
            {(showResults || isReviewMode) && (
-               <div className="flex items-center gap-3 bg-white pl-4 pr-1.5 py-1.5 rounded-full border border-slate-100 shadow-sm">
-                   <span className="hidden md:inline text-[10px] font-bold text-slate-400 uppercase tracking-wider">Your Score</span>
-                   <span className={`text-sm md:text-base font-bold px-3 py-1 rounded-full ${score === (previousResult?.max_score || Object.keys(validation).length) ? 'bg-emerald-500 text-white shadow-md shadow-emerald-200' : 'bg-slate-100 text-slate-800'}`}>
-                       {score} / {previousResult?.max_score || Object.keys(validation).length}
-                   </span>
+               <div className="relative" ref={historyDropdownRef}>
+                   <button 
+                       onClick={() => setIsHistoryOpen(!isHistoryOpen)}
+                       className="flex items-center gap-3 bg-white pl-4 pr-3 py-1.5 rounded-full border border-slate-100 shadow-sm hover:bg-slate-50 transition-colors group"
+                   >
+                       <span className="hidden md:inline text-[10px] font-bold text-slate-400 uppercase tracking-wider group-hover:text-indigo-500 transition-colors">Your Score</span>
+                       <span className={`text-sm md:text-base font-bold px-3 py-1 rounded-full ${score === (viewingResult?.max_score || Object.keys(validation).length) ? 'bg-emerald-500 text-white shadow-md shadow-emerald-200' : 'bg-slate-100 text-slate-800'}`}>
+                           {score} / {viewingResult?.max_score || Object.keys(validation).length}
+                       </span>
+                       <svg className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${isHistoryOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                           <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                       </svg>
+                   </button>
+
+                   {isHistoryOpen && (
+                       <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-2xl shadow-xl border border-slate-100 p-2 z-50 animate-in fade-in zoom-in-95 duration-200 origin-top-right">
+                           <div className="flex items-center justify-between px-3 py-2 mb-1">
+                               <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Attempt History</span>
+                               <span className="text-[10px] font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">{history.length} total</span>
+                           </div>
+                           
+                           <div className="max-h-[300px] overflow-y-auto custom-scrollbar space-y-1 mb-2 pr-1">
+                               {history.map((res, idx) => {
+                                   const isSelected = viewingResult?.id === res.id;
+                                   const attemptNum = history.length - idx;
+                                   const date = new Date(res.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+                                   
+                                   return (
+                                       <button
+                                           key={res.id}
+                                           onClick={() => {
+                                               setViewingResult(res);
+                                               setIsHistoryOpen(false);
+                                           }}
+                                           className={`w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium transition-all flex items-center justify-between group ${
+                                               isSelected 
+                                                   ? 'bg-indigo-50 text-indigo-900 border border-indigo-100' 
+                                                   : 'hover:bg-slate-50 text-slate-600 border border-transparent'
+                                           }`}
+                                       >
+                                           <div className="flex flex-col">
+                                               <span className="font-bold">Attempt {attemptNum}</span>
+                                               <span className="text-[10px] text-slate-400 font-medium">{date}</span>
+                                           </div>
+                                           <div className="flex items-center gap-2">
+                                               <span className={`text-xs font-bold px-2 py-1 rounded-lg ${
+                                                   res.score === res.max_score 
+                                                       ? 'bg-emerald-100 text-emerald-700' 
+                                                       : 'bg-slate-100 text-slate-500'
+                                               }`}>
+                                                   {res.score}/{res.max_score}
+                                               </span>
+                                               {isSelected && <svg className="w-4 h-4 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
+                                           </div>
+                                       </button>
+                                   );
+                               })}
+                           </div>
+                           
+                           <div className="border-t border-slate-100 my-2 pt-2">
+                               <button
+                                   onClick={() => {
+                                       setViewingResult(null);
+                                       setIsHistoryOpen(false);
+                                   }}
+                                   className={`w-full text-left px-4 py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 shadow-sm hover:shadow-md active:scale-95 ${
+                                       !viewingResult 
+                                           ? 'bg-emerald-500 text-white ring-2 ring-emerald-200 ring-offset-1' 
+                                           : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border border-emerald-100'
+                                   }`}
+                               >
+                                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
+                                   Start New Attempt
+                               </button>
+                           </div>
+                       </div>
+                   )}
                </div>
            )}
 
@@ -1907,14 +2024,14 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
       </div>
 
       <div className="max-w-7xl mx-auto px-4">
-        {isReviewMode && previousResult ? (
+        {isReviewMode && viewingResult ? (
             <div className="max-w-5xl mx-auto">
                 {!(type === ExerciseType.GRAMMAR || type === ExerciseType.VOCABULARY) && (
                     <div className="mb-10">
                         <ResultReview 
-                            details={previousResult.details} 
-                            score={previousResult.score} 
-                            maxScore={previousResult.max_score} 
+                            details={viewingResult.details} 
+                            score={viewingResult.score} 
+                            maxScore={viewingResult.max_score} 
                             type={type} 
                         />
                     </div>

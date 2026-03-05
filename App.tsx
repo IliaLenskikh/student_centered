@@ -147,7 +147,20 @@ export default function App() {
                       resultsMap[res.exercise_title] = res;
                   }
               });
-              setUserResults(resultsMap);
+              
+              setUserResults(prev => {
+                  const merged = { ...resultsMap };
+                  // Preserve optimistic updates (temp IDs) if they are not in the fetched data or are newer
+                  Object.values(prev).forEach(prevRes => {
+                      const key = prevRes.exercise_title;
+                      if (!merged[key]) {
+                          merged[key] = prevRes;
+                      } else if (prevRes.id.startsWith('temp-') && new Date(prevRes.created_at) > new Date(merged[key].created_at)) {
+                          merged[key] = prevRes;
+                      }
+                  });
+                  return merged;
+              });
           }
       };
       fetchResults();
@@ -225,6 +238,24 @@ export default function App() {
     newSet.add(title);
     setCompletedStories(newSet);
 
+    // Create the new result object
+    const newResult: StudentResult = {
+        id: 'temp-' + Date.now(), // Temporary ID until refresh
+        student_id: authProfile?.id || '',
+        exercise_title: title,
+        exercise_type: type,
+        score: score,
+        max_score: maxScore,
+        details: details,
+        created_at: new Date().toISOString()
+    };
+
+    // Update local state immediately
+    setUserResults(prev => ({
+        ...prev,
+        [title]: newResult
+    }));
+
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
@@ -249,8 +280,8 @@ export default function App() {
     }
   };
 
-  const startExercise = (story: Story, type: ExerciseType) => {
-    navigate(`/exercise/${type}/${encodeURIComponent(story.title)}`);
+  const startExercise = (story: Story, type: ExerciseType, mode: 'review' | 'retry' = 'review') => {
+    navigate(`/exercise/${type}/${encodeURIComponent(story.title)}`, { state: { mode } });
   };
 
   const goHome = () => {
