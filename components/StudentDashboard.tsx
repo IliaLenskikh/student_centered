@@ -147,44 +147,75 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
             </div>
         )}
 
-        <div className="mb-12 text-center">
-            <h1 className="text-4xl md:text-5xl font-extrabold text-slate-900 mb-4 tracking-tight">
-            Hello, {userProfile.name || 'Student'}!
-            </h1>
-            <p className="text-lg text-slate-500 max-w-2xl mx-auto">
-            Ready to master your English skills? Choose a category below to get started.
-            </p>
+        <div className="mb-8 flex flex-col md:flex-row items-end justify-between gap-4">
+            <div>
+                <h1 className="text-3xl md:text-4xl font-bold text-slate-800 mb-2 tracking-tight">
+                Hello, {userProfile.name || 'Student'}! 👋
+                </h1>
+                <p className="text-slate-500 font-medium">
+                Ready to master your English skills today?
+                </p>
+            </div>
+            <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-full shadow-sm border border-slate-100">
+                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Online</span>
+            </div>
         </div>
 
-        <div className="bg-white/90 backdrop-blur rounded-3xl p-8 shadow-xl border border-slate-100 mb-12 flex flex-col md:flex-row items-center justify-between gap-8">
-            <div className="flex items-center gap-6">
-                <div className="relative w-24 h-24 flex items-center justify-center">
-                    <svg className="w-full h-full transform -rotate-90">
-                        <circle cx="48" cy="48" r="40" stroke="currentColor" strokeWidth="8" fill="transparent" className="text-slate-100" />
-                        <circle cx="48" cy="48" r="40" stroke="currentColor" strokeWidth="8" fill="transparent" strokeDasharray={251.2} strokeDashoffset={251.2 - (251.2 * stats.progressPercentage) / 100} className="text-indigo-600 transition-all duration-1000 ease-out" />
-                    </svg>
-                    <span className="absolute text-xl font-bold text-slate-800">{stats.progressPercentage}%</span>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+            {/* Total Progress Card - Purple Gradient */}
+            <div className="md:col-span-2 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-[32px] p-8 text-white shadow-lg relative overflow-hidden flex flex-col justify-between min-h-[200px]">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-16 -mt-16 blur-2xl"></div>
+                <div className="absolute bottom-0 left-0 w-48 h-48 bg-indigo-400/20 rounded-full -ml-10 -mb-10 blur-xl"></div>
+                
+                <div className="relative z-10 flex items-start justify-between">
+                    <div>
+                        <h2 className="text-2xl font-bold mb-1">Your Progress</h2>
+                        <p className="text-indigo-100 text-sm font-medium opacity-90">Keep up the great work!</p>
+                    </div>
+                    <div className="bg-white/20 backdrop-blur-md px-3 py-1 rounded-full border border-white/10">
+                        <span className="text-xs font-bold tracking-wider uppercase">{stats.progressPercentage}% Complete</span>
+                    </div>
                 </div>
-                <div>
-                    <div className="text-sm text-slate-400 font-bold uppercase tracking-wider mb-1">Total Progress</div>
-                    <div className="text-2xl font-extrabold text-slate-900">{stats.totalCompleted} / {stats.totalTasks} Tasks</div>
+
+                <div className="relative z-10 mt-6">
+                    <div className="flex items-end gap-2 mb-2">
+                        <span className="text-5xl font-bold">{stats.totalCompleted}</span>
+                        <span className="text-lg text-indigo-200 font-medium mb-1.5">/ {stats.totalTasks} tasks</span>
+                    </div>
+                    <div className="w-full bg-black/20 rounded-full h-2 overflow-hidden">
+                        <div 
+                            className="bg-white h-full rounded-full transition-all duration-1000 ease-out" 
+                            style={{ width: `${stats.progressPercentage}%` }}
+                        ></div>
+                    </div>
                 </div>
             </div>
 
-            <div className="flex gap-4">
-                <button 
-                    onClick={handleGenerateReport}
-                    className="flex items-center gap-3 bg-white border border-slate-200 text-slate-600 px-6 py-4 rounded-2xl shadow-sm hover:bg-slate-50 hover:border-indigo-200 hover:text-indigo-600 transition-all group"
-                >
-                    <div className="p-2 bg-slate-100 rounded-lg group-hover:bg-indigo-100 transition-colors">
-                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+            {/* AI Analysis Card - White with colorful accents */}
+            <button 
+                onClick={handleGenerateReport}
+                className="bg-white rounded-[32px] p-8 shadow-sm border border-slate-100 hover:shadow-md transition-all group relative overflow-hidden text-left flex flex-col justify-between min-h-[200px]"
+            >
+                <div className="absolute top-0 right-0 p-6 opacity-50 group-hover:opacity-100 transition-opacity group-hover:scale-110 duration-300">
+                    <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600">
+                        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
                     </div>
-                    <div className="text-left">
-                        <div className="font-bold text-sm">My Progress</div>
-                        <div className="text-xs text-slate-400">AI Analysis</div>
+                </div>
+                
+                <div>
+                    <div className="w-10 h-10 rounded-full bg-rose-100 flex items-center justify-center text-rose-500 mb-4">
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
                     </div>
-                </button>
-            </div>
+                    <h3 className="text-xl font-bold text-slate-800 mb-1">AI Analysis</h3>
+                    <p className="text-slate-500 text-sm">Get personalized insights</p>
+                </div>
+
+                <div className="mt-4 flex items-center gap-2 text-indigo-600 font-bold text-sm group-hover:translate-x-1 transition-transform">
+                    View Report
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
+                </div>
+            </button>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

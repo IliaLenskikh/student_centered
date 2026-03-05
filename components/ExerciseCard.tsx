@@ -1,29 +1,122 @@
 
 import React from 'react';
-import { Story, ExerciseType } from '../types';
+import { Story, ExerciseType, StudentResult } from '../types';
 
 interface ExerciseCardProps {
   story: Story;
   type: ExerciseType;
   onClick: () => void;
   isCompleted?: boolean;
+  result?: StudentResult;
   readOnly?: boolean;
 }
 
-const ExerciseCard: React.FC<ExerciseCardProps> = ({ story, type, onClick, isCompleted, readOnly }) => {
+const ExerciseCard: React.FC<ExerciseCardProps> = ({ story, type, onClick, isCompleted, result, readOnly }) => {
 
-  const getBadgeStyle = () => {
+  const getThemeColors = () => {
+    if (isCompleted) {
+        // Completed state (White card)
+        let badgeClass = '';
+        switch(type) {
+            case ExerciseType.GRAMMAR: badgeClass = 'bg-indigo-50 text-indigo-600 border-indigo-100'; break;
+            case ExerciseType.VOCABULARY: badgeClass = 'bg-teal-50 text-teal-600 border-teal-100'; break;
+            case ExerciseType.SPEAKING: badgeClass = 'bg-rose-50 text-rose-600 border-rose-100'; break;
+            case ExerciseType.ORAL_SPEECH: badgeClass = 'bg-purple-50 text-purple-600 border-purple-100'; break;
+            case ExerciseType.WRITING: badgeClass = 'bg-blue-50 text-blue-600 border-blue-100'; break;
+            case ExerciseType.READING: badgeClass = 'bg-amber-50 text-amber-600 border-amber-100'; break;
+            case ExerciseType.LISTENING: badgeClass = 'bg-cyan-50 text-cyan-600 border-cyan-100'; break;
+            default: badgeClass = 'bg-gray-50 text-gray-600 border-gray-100';
+        }
+
+        return {
+            card: 'bg-white border-slate-200 hover:border-indigo-300 shadow-sm opacity-90 hover:opacity-100',
+            title: 'text-slate-700',
+            desc: 'text-slate-400',
+            badge: badgeClass,
+            divider: 'border-slate-100',
+            meta: 'text-slate-400',
+            scoreBg: 'bg-emerald-50 text-emerald-600 border border-emerald-100'
+        };
+    }
+
+    // Not Completed state (Pastel Colored card)
     switch(type) {
-      case ExerciseType.GRAMMAR: return 'bg-indigo-50 text-indigo-700 border-indigo-100';
-      case ExerciseType.VOCABULARY: return 'bg-teal-50 text-teal-700 border-teal-100';
-      case ExerciseType.SPEAKING: return 'bg-rose-50 text-rose-700 border-rose-100';
-      case ExerciseType.ORAL_SPEECH: return 'bg-purple-50 text-purple-700 border-purple-100';
-      case ExerciseType.WRITING: return 'bg-blue-50 text-blue-700 border-blue-100';
-      case ExerciseType.READING: return 'bg-amber-50 text-amber-700 border-amber-100';
-      case ExerciseType.LISTENING: return 'bg-cyan-50 text-cyan-700 border-cyan-100';
-      default: return 'bg-gray-50 text-gray-700 border-gray-100';
+        case ExerciseType.GRAMMAR: return {
+            card: 'bg-indigo-100 border-indigo-200 hover:bg-indigo-200 shadow-sm hover:shadow-md',
+            title: 'text-indigo-900',
+            desc: 'text-indigo-800/80',
+            badge: 'bg-white text-indigo-700 border-white/50 shadow-sm',
+            divider: 'border-indigo-200',
+            meta: 'text-indigo-600',
+            scoreBg: ''
+        };
+        case ExerciseType.VOCABULARY: return {
+            card: 'bg-teal-100 border-teal-200 hover:bg-teal-200 shadow-sm hover:shadow-md',
+            title: 'text-teal-900',
+            desc: 'text-teal-800/80',
+            badge: 'bg-white text-teal-700 border-white/50 shadow-sm',
+            divider: 'border-teal-200',
+            meta: 'text-teal-600',
+            scoreBg: ''
+        };
+        case ExerciseType.SPEAKING: return {
+            card: 'bg-rose-100 border-rose-200 hover:bg-rose-200 shadow-sm hover:shadow-md',
+            title: 'text-rose-900',
+            desc: 'text-rose-800/80',
+            badge: 'bg-white text-rose-700 border-white/50 shadow-sm',
+            divider: 'border-rose-200',
+            meta: 'text-rose-600',
+            scoreBg: ''
+        };
+        case ExerciseType.ORAL_SPEECH: return {
+            card: 'bg-purple-100 border-purple-200 hover:bg-purple-200 shadow-sm hover:shadow-md',
+            title: 'text-purple-900',
+            desc: 'text-purple-800/80',
+            badge: 'bg-white text-purple-700 border-white/50 shadow-sm',
+            divider: 'border-purple-200',
+            meta: 'text-purple-600',
+            scoreBg: ''
+        };
+        case ExerciseType.WRITING: return {
+            card: 'bg-blue-100 border-blue-200 hover:bg-blue-200 shadow-sm hover:shadow-md',
+            title: 'text-blue-900',
+            desc: 'text-blue-800/80',
+            badge: 'bg-white text-blue-700 border-white/50 shadow-sm',
+            divider: 'border-blue-200',
+            meta: 'text-blue-600',
+            scoreBg: ''
+        };
+        case ExerciseType.READING: return {
+            card: 'bg-amber-100 border-amber-200 hover:bg-amber-200 shadow-sm hover:shadow-md',
+            title: 'text-amber-900',
+            desc: 'text-amber-800/80',
+            badge: 'bg-white text-amber-700 border-white/50 shadow-sm',
+            divider: 'border-amber-200',
+            meta: 'text-amber-600',
+            scoreBg: ''
+        };
+        case ExerciseType.LISTENING: return {
+            card: 'bg-cyan-100 border-cyan-200 hover:bg-cyan-200 shadow-sm hover:shadow-md',
+            title: 'text-cyan-900',
+            desc: 'text-cyan-800/80',
+            badge: 'bg-white text-cyan-700 border-white/50 shadow-sm',
+            divider: 'border-cyan-200',
+            meta: 'text-cyan-600',
+            scoreBg: ''
+        };
+        default: return {
+            card: 'bg-slate-100 border-slate-200 hover:bg-slate-200 shadow-sm hover:shadow-md',
+            title: 'text-slate-900',
+            desc: 'text-slate-800/80',
+            badge: 'bg-white text-slate-700 border-white/50 shadow-sm',
+            divider: 'border-slate-200',
+            meta: 'text-slate-600',
+            scoreBg: ''
+        };
     }
   };
+
+  const colors = getThemeColors();
 
   const getPreviewText = () => {
     if (type === ExerciseType.WRITING) {
@@ -37,51 +130,37 @@ const ExerciseCard: React.FC<ExerciseCardProps> = ({ story, type, onClick, isCom
     return story.template && story.template.length > 0 ? story.template[0].replace(/\{0\}/g, '...') : "Exercise details...";
   }
 
-  const badgeStyle = getBadgeStyle();
-
   return (
     <div 
-      className={`bg-white rounded-2xl p-6 shadow-sm border border-slate-100 hover:shadow-lg hover:border-indigo-100 transition-all duration-300 cursor-pointer group relative overflow-hidden h-full flex flex-col`}
+      onClick={onClick}
+      className={`${colors.card} rounded-[24px] p-6 shadow-sm border hover:-translate-y-1 transition-all duration-300 cursor-pointer group relative overflow-hidden h-full flex flex-col`}
     >
-      {isCompleted && (
-        <div className="absolute top-0 right-0 p-4">
-            <div className="w-6 h-6 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-            </div>
-        </div>
-      )}
-
       {/* Main Click Area */}
-      <div onClick={onClick} className="flex-1">
-        <span className={`inline-block px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wide border mb-4 ${badgeStyle}`}>
-            {type === ExerciseType.READING && story.questions ? 'True/False' : 
-             type === ExerciseType.ORAL_SPEECH ? (story.speakingType === 'interview' ? 'Interview' : 'Monologue') : type}
-        </span>
+      <div className="flex-1">
+        <div className="flex justify-between items-start mb-4">
+            <span className={`inline-block px-3 py-1 rounded-xl text-[10px] font-bold uppercase tracking-wider ${colors.badge}`}>
+                {type === ExerciseType.READING && story.questions ? 'True/False' : 
+                 type === ExerciseType.ORAL_SPEECH ? (story.speakingType === 'interview' ? 'Interview' : 'Monologue') : type}
+            </span>
+        </div>
         
-        <h3 className="font-bold text-lg text-slate-800 mb-3 group-hover:text-indigo-600 transition-colors leading-tight">
+        <h3 className={`font-bold text-lg md:text-xl mb-2 transition-colors leading-tight ${colors.title}`}>
           {story.title}
         </h3>
         
-        <p className="text-slate-500 text-sm leading-relaxed line-clamp-3 mb-4">
+        <p className={`text-sm leading-relaxed line-clamp-3 mb-4 font-medium ${colors.desc}`}>
           {getPreviewText()}
         </p>
       </div>
 
-      <div className="pt-4 border-t border-slate-50 flex items-center justify-between text-xs font-medium text-slate-400 mt-auto">
-         <span className="flex items-center gap-1">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-            5-10 min
-         </span>
-          <div className="flex items-center gap-3">
-            <button 
-                onClick={onClick}
-                className="group-hover:translate-x-1 transition-transform text-indigo-500 font-bold opacity-0 group-hover:opacity-100 flex items-center gap-1"
-            >
-                {readOnly ? 'View' : 'Start'}
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z" /></svg>
-            </button>
-         </div>
-      </div>
+      {isCompleted && result && (
+          <div className={`pt-4 border-t flex items-center justify-between mt-auto ${colors.divider}`}>
+             <span className={`flex items-center gap-2 text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full ${colors.scoreBg}`}>
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                Score: {result.score} / {result.max_score}
+             </span>
+          </div>
+      )}
     </div>
   );
 };

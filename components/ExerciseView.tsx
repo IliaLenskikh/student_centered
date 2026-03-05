@@ -1700,7 +1700,7 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
 
   const renderGrammarTemplate = () => {
     return (
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-8 md:p-12 leading-[2.5] text-lg text-slate-800 max-w-4xl mx-auto">
+      <div className="bg-white rounded-[32px] shadow-sm border border-slate-100 p-8 md:p-12 leading-[3.5rem] text-lg text-slate-700 max-w-7xl mx-auto relative">
         {story.template?.map((sentence, index) => {
           const parts = sentence.split(/\{(\d+)\}/);
           return (
@@ -1718,23 +1718,40 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
                   const userAnswer = inputs[taskId] || '';
                   const hasValue = userAnswer.length > 0;
                   
+                  // Calculate a static width based on the prompt word length to prevent layout shift while typing
+                  // 14px per character + 45px buffer for padding/icon (increased from previous)
+                  const staticWidth = Math.max(150, task.word.length * 15 + 45);
+
                   return (
-                    <span key={partIndex} className="inline-block mx-2 relative align-middle group">
-                        <span className={`absolute left-0 text-[10px] font-bold tracking-wider text-indigo-500 bg-white px-1 transition-all duration-200 pointer-events-none z-10 ${hasValue ? '-top-3 opacity-100 scale-100' : 'top-2.5 opacity-0 scale-90'}`}>
-                            {task.word}
-                        </span>
-                        <input type="text" value={userAnswer} onChange={(e) => handleInputChange(taskIndex.toString(), e.target.value)} placeholder={hasValue ? '' : task.word}
-                            className={`h-10 px-3 min-w-[140px] text-center font-semibold rounded-lg border-2 outline-none transition-all duration-200 placeholder:text-slate-400 placeholder:font-bold placeholder:tracking-wide placeholder:uppercase placeholder:opacity-60 ${isCorrect === true ? 'border-emerald-400 bg-emerald-50 text-emerald-800' : isCorrect === false ? 'border-rose-400 bg-rose-50 text-rose-800' : 'border-slate-200 bg-slate-50 focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10'} ${effectiveReadOnly ? 'opacity-70 cursor-not-allowed' : ''}`}
-                            disabled={showResults || effectiveReadOnly} autoComplete="off" spellCheck="false"
+                    <span key={partIndex} className="inline-block relative group align-middle mx-1.5">
+                        <input 
+                            type="text" 
+                            value={userAnswer} 
+                            onChange={(e) => handleInputChange(taskIndex.toString(), e.target.value)} 
+                            placeholder={task.word}
+                            style={{ width: `${staticWidth}px` }}
+                            className={`h-10 px-3 text-center font-bold rounded-xl outline-none transition-all duration-200 placeholder:text-indigo-300 placeholder:font-bold placeholder:uppercase placeholder:tracking-wider ${
+                                isCorrect === true 
+                                    ? 'bg-emerald-100 text-emerald-800 border-2 border-emerald-100' 
+                                    : isCorrect === false 
+                                        ? 'bg-rose-100 text-rose-800 border-2 border-rose-100' 
+                                        : hasValue
+                                            ? 'bg-indigo-50 text-indigo-700 border-2 border-indigo-100'
+                                            : 'bg-white text-slate-700 border-2 border-indigo-100 shadow-sm focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10'
+                            } ${effectiveReadOnly ? 'opacity-90 cursor-default' : ''}`}
+                            disabled={showResults || effectiveReadOnly} 
+                            autoComplete="off" 
+                            spellCheck="false"
                         />
                         {showResults && !isCorrect && (
-                            <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 z-20 hidden group-hover:block w-48">
-                                <div className="bg-slate-900 text-white p-3 rounded-lg shadow-xl text-sm text-center">
+                            <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 z-20 hidden group-hover:block w-max max-w-[200px]">
+                                <div className="bg-slate-900 text-white p-3 rounded-xl shadow-xl text-sm text-center">
                                     <p className="font-bold mb-1 text-emerald-400">{task.answer}</p>
                                     <button onClick={() => handleAskAI(taskId, story)} className="text-[10px] text-slate-400 hover:text-white underline">
                                         {loadingExplanation === taskId ? 'Thinking...' : 'Why?'}
                                     </button>
                                 </div>
+                                <div className="w-3 h-3 bg-slate-900 transform rotate-45 absolute -bottom-1.5 left-1/2 -translate-x-1/2"></div>
                             </div>
                         )}
                     </span>
@@ -1745,6 +1762,15 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
             </span>
           );
         })}
+        
+        {!showResults && !effectiveReadOnly && (
+            <div className="mt-12 flex justify-end">
+                <button onClick={checkAnswers} className="bg-slate-900 hover:bg-slate-800 text-white px-8 py-3 rounded-xl font-bold text-base transition-all shadow-lg hover:shadow-xl active:scale-95 flex items-center gap-2">
+                    <span>Check Answers</span>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                </button>
+            </div>
+        )}
       </div>
     );
   };
@@ -1853,63 +1879,60 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
   };
 
   return (
-    <div className="pb-20">
-      <div className="bg-white/80 backdrop-blur-md border-b border-slate-200 sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 h-20 flex items-center justify-between">
-          <button onClick={onBack} className="flex items-center text-slate-500 hover:text-slate-800 transition-colors group px-2 py-1 rounded-lg hover:bg-slate-50">
-            <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center mr-3 group-hover:bg-indigo-100 group-hover:text-indigo-600 transition-colors">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
-            </div>
-            <span className="font-bold text-sm">Dashboard</span>
-          </button>
-          
-          <h2 className="font-bold text-slate-800 truncate max-w-[200px] md:max-w-md text-lg">{story.title}</h2>
-
-          <div className="flex items-center gap-4">
-             {showResults && (
-                 <div className="flex items-center gap-3 bg-slate-50 pl-4 pr-1 py-1 rounded-full border border-slate-100">
-                     <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Score</span>
-                     <span className={`text-lg font-bold px-3 py-1 rounded-full ${score === Object.keys(validation).length ? 'bg-emerald-500 text-white' : 'bg-white text-slate-800 shadow-sm border border-slate-100'}`}>
-                         {score} / {Object.keys(validation).length}
-                     </span>
-                 </div>
-             )}
-             {!showResults && !readOnly && type !== ExerciseType.WRITING && type !== ExerciseType.SPEAKING && type !== ExerciseType.ORAL_SPEECH && type !== ExerciseType.LISTENING && (
-                <button onClick={checkAnswers} className="bg-slate-900 hover:bg-slate-800 text-white px-6 py-2.5 rounded-xl font-bold text-sm transition-all shadow-lg active:scale-95">
-                    Check All Answers
-                </button>
-             )}
+    <div className="pb-10">
+      <div className="max-w-7xl mx-auto px-4 py-6 flex items-center justify-between">
+        <button onClick={onBack} className="flex items-center text-slate-500 hover:text-slate-800 transition-colors group px-3 py-2 rounded-xl hover:bg-white hover:shadow-sm">
+          <div className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center mr-3 group-hover:border-indigo-200 group-hover:text-indigo-600 transition-colors shadow-sm">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
           </div>
+          <span className="font-bold text-sm">Back to List</span>
+        </button>
+        
+        <div className="flex items-center gap-4">
+           {(showResults || isReviewMode) && (
+               <div className="flex items-center gap-3 bg-white pl-4 pr-1.5 py-1.5 rounded-full border border-slate-100 shadow-sm">
+                   <span className="hidden md:inline text-[10px] font-bold text-slate-400 uppercase tracking-wider">Your Score</span>
+                   <span className={`text-sm md:text-base font-bold px-3 py-1 rounded-full ${score === (previousResult?.max_score || Object.keys(validation).length) ? 'bg-emerald-500 text-white shadow-md shadow-emerald-200' : 'bg-slate-100 text-slate-800'}`}>
+                       {score} / {previousResult?.max_score || Object.keys(validation).length}
+                   </span>
+               </div>
+           )}
+
         </div>
       </div>
+      
+      <div className="max-w-7xl mx-auto px-4 mb-8 text-center">
+        <h2 className="text-2xl md:text-3xl font-bold text-slate-900 mb-2">{story.title}</h2>
+        <div className="h-1 w-20 bg-indigo-500 rounded-full mx-auto opacity-20"></div>
+      </div>
 
-      <div className="max-w-7xl mx-auto px-4 py-8">
+      <div className="max-w-7xl mx-auto px-4">
         {isReviewMode && previousResult ? (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                <div className="order-2 lg:order-1">
-                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 mb-6">
-                        <h3 className="font-bold text-slate-800 mb-4 text-lg">Exercise Content</h3>
-                        {/* Render the content in read-only mode for context */}
-                        <div className="opacity-80 pointer-events-none select-none grayscale-[0.5]">
+            <div className="max-w-5xl mx-auto">
+                {!(type === ExerciseType.GRAMMAR || type === ExerciseType.VOCABULARY) && (
+                    <div className="mb-10">
+                        <ResultReview 
+                            details={previousResult.details} 
+                            score={previousResult.score} 
+                            maxScore={previousResult.max_score} 
+                            type={type} 
+                        />
+                    </div>
+                )}
+                <div className="space-y-6">
+                    {(type === ExerciseType.GRAMMAR || type === ExerciseType.VOCABULARY) ? (
+                        renderGrammarTemplate()
+                    ) : (
+                        <div className="bg-white p-8 md:p-12 rounded-3xl shadow-sm border border-slate-100">
                             {type === ExerciseType.WRITING && (
-                                <div className="prose prose-slate">
-                                    <p>{story.emailBody}</p>
+                                <div className="prose prose-slate max-w-none">
+                                    <p className="whitespace-pre-wrap leading-relaxed text-lg text-slate-700">{story.emailBody}</p>
                                 </div>
                             )}
-                            {(type === ExerciseType.GRAMMAR || type === ExerciseType.VOCABULARY) && renderGrammarTemplate()}
                             {type === ExerciseType.READING && (story.questions ? renderTrueFalse() : renderReadingMatching())}
                             {type === ExerciseType.LISTENING && renderListening()}
-                            {/* Speaking content is usually just audio/prompt, which ResultReview covers or is less visual */}
                         </div>
-                    </div>
-                </div>
-                <div className="order-1 lg:order-2">
-                    <ResultReview 
-                        details={previousResult.details} 
-                        score={previousResult.score} 
-                        maxScore={previousResult.max_score} 
-                        type={type} 
-                    />
+                    )}
                 </div>
             </div>
         ) : (
@@ -1941,6 +1964,15 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
                 )}
 
                 {type === ExerciseType.LISTENING && renderListening()}
+
+                {!showResults && !effectiveReadOnly && type !== ExerciseType.WRITING && type !== ExerciseType.SPEAKING && type !== ExerciseType.ORAL_SPEECH && type !== ExerciseType.LISTENING && type !== ExerciseType.GRAMMAR && type !== ExerciseType.VOCABULARY && (
+                    <div className="mt-12 flex justify-center pb-20">
+                        <button onClick={checkAnswers} className="bg-slate-900 hover:bg-slate-800 text-white px-10 py-4 rounded-2xl font-bold text-lg transition-all shadow-xl hover:shadow-2xl hover:-translate-y-1 active:scale-95 flex items-center gap-3">
+                            <span>Check Answers</span>
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                        </button>
+                    </div>
+                )}
                 
                 {/* Fallback for unknown types */}
                 {!Object.values(ExerciseType).includes(type) && (

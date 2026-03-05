@@ -59,6 +59,7 @@ interface AppRouterProps {
   goHome: () => void;
   startExercise: (story: Story, type: ExerciseType) => void;
   completedStories: Set<string>;
+  userResults: Record<string, StudentResult>;
   handleStoryComplete: (title: string, type: ExerciseType, score: number, maxScore: number, details: AttemptDetail[]) => Promise<void>;
   
   // Stats
@@ -150,6 +151,7 @@ export const AppRouter: React.FC<AppRouterProps> = (props) => {
     goHome,
     startExercise,
     completedStories,
+    userResults,
     handleStoryComplete,
     progressPercentage,
     totalCompleted,
@@ -162,6 +164,7 @@ export const AppRouter: React.FC<AppRouterProps> = (props) => {
         stories={stories} 
         type={type} 
         completedStories={completedStories} 
+        userResults={userResults}
         onStartExercise={startExercise} 
         onGoHome={goHome} 
         readOnly={false}

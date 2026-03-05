@@ -65,6 +65,7 @@ export default function App() {
 
   const [loading, setLoading] = useState(false);
   const [completedStories, setCompletedStories] = useState<Set<string>>(new Set());
+  const [userResults, setUserResults] = useState<Record<string, StudentResult>>({});
   
   // Auth state
   const [email, setEmail] = useState('');
@@ -74,6 +75,37 @@ export default function App() {
   const [isLoginMode, setIsLoginMode] = useState(false);
   
   const totalTasks = allStories.length;
+
+  const touchStart = useRef<number | null>(null);
+  const touchEnd = useRef<number | null>(null);
+
+  // Minimum swipe distance in pixels
+  const minSwipeDistance = 50;
+
+  const handleBackNavigation = () => {
+    if (location.pathname !== '/' && location.pathname !== '/auth' && location.pathname !== '/forgot-password') {
+        navigate(-1);
+    }
+  };
+
+  const onTouchStart = (e: React.TouchEvent) => {
+    touchEnd.current = null;
+    touchStart.current = e.targetTouches[0].clientX;
+  };
+
+  const onTouchMove = (e: React.TouchEvent) => {
+    touchEnd.current = e.targetTouches[0].clientX;
+  };
+
+  const onTouchEnd = () => {
+    if (!touchStart.current || !touchEnd.current) return;
+    const distance = touchStart.current - touchEnd.current;
+    const isRightSwipe = distance < -minSwipeDistance;
+    
+    if (isRightSwipe) {
+       handleBackNavigation();
+    }
+  };
 
   useEffect(() => {
     if (authSuccessMsg === "Please set a new password below.") {
@@ -100,6 +132,28 @@ export default function App() {
   useEffect(() => {
     if (authProfile?.id) {
       setCompletedStories(new Set(authProfile.completed_stories || []));
+      
+      const fetchResults = async () => {
+          const { data } = await supabase
+              .from('student_results')
+              .select('*')
+              .eq('student_id', authProfile.id);
+          
+          if (data) {
+              const resultsMap: Record<string, StudentResult> = {};
+              data.forEach((res: StudentResult) => {
+                  // Use the latest result if multiple exist for same exercise
+                  if (!resultsMap[res.exercise_title] || new Date(res.created_at) > new Date(resultsMap[res.exercise_title].created_at)) {
+                      resultsMap[res.exercise_title] = res;
+                  }
+              });
+              setUserResults(resultsMap);
+          }
+      };
+      fetchResults();
+    } else {
+        setUserResults({});
+        setCompletedStories(new Set());
     }
   }, [authProfile?.id]);
 
@@ -224,11 +278,10 @@ export default function App() {
   const learningBackground = {
     backgroundColor: '#f8fafc',
     backgroundImage: `
-      linear-gradient(rgba(99, 102, 241, 0.05) 1px, transparent 1px), 
-      linear-gradient(90deg, rgba(99, 102, 241, 0.05) 1px, transparent 1px)
+      radial-gradient(circle at 10% 20%, rgba(224, 231, 255, 0.4) 0%, transparent 20%),
+      radial-gradient(circle at 90% 80%, rgba(243, 232, 255, 0.4) 0%, transparent 20%)
     `,
-    backgroundSize: '30px 30px',
-    backgroundPosition: 'center center'
+    backgroundAttachment: 'fixed'
   };
 
   if (isAuthChecking || isProfileLoading) {
@@ -272,7 +325,21 @@ export default function App() {
   }
 
   return (
-      <div className="min-h-screen flex flex-col font-sans text-slate-900 bg-slate-50 relative overflow-hidden" style={learningBackground}>
+      <div 
+        className="min-h-screen flex flex-col font-sans text-slate-900 bg-slate-50 relative overflow-hidden" 
+        style={learningBackground}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+      >
+          {/* Global Back Navigation Area (Left Gutter) */}
+          {location.pathname !== '/' && location.pathname !== '/auth' && location.pathname !== '/forgot-password' && (
+            <div 
+                onClick={handleBackNavigation}
+                className="fixed top-0 left-0 h-full w-12 md:w-16 z-40 cursor-pointer hover:bg-slate-400/10 transition-colors"
+                title="Go Back"
+            />
+          )}
           
           <div className="flex-1 overflow-y-auto relative z-10 flex flex-col">
             <AppRouter
@@ -296,6 +363,7 @@ export default function App() {
               goHome={goHome}
               startExercise={startExercise}
               completedStories={completedStories}
+              userResults={userResults}
               handleStoryComplete={handleStoryComplete}
               progressPercentage={progressPercentage}
               totalCompleted={totalCompleted}
