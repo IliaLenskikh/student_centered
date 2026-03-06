@@ -223,6 +223,14 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [aiFeedback, setAiFeedback] = useState<{score?: number, feedback?: string, mistakes?: string[]} | null>(null);
   const [showAiModal, setShowAiModal] = useState(false);
+  const [highlightedField, setHighlightedField] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (highlightedField) {
+        const timer = setTimeout(() => setHighlightedField(null), 2000);
+        return () => clearTimeout(timer);
+    }
+  }, [highlightedField]);
 
   // --- Real-time Broadcasting Logic ---
   const broadcastChannelRef = useRef<any>(null);
@@ -719,9 +727,9 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
       return (
           <div className="bg-white p-8 rounded-3xl shadow-xl border border-slate-100 mb-8 w-full max-w-2xl mx-auto">
               <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-xl font-bold text-slate-800">Review Your Recording</h3>
+                  <h3 className="text-xl font-bold text-slate-800">Прослушайте вашу запись</h3>
                   <div className="px-3 py-1 bg-indigo-100 text-indigo-600 rounded-full text-xs font-bold uppercase tracking-wider">
-                      {attempts.length} {attempts.length === 1 ? 'Attempt' : 'Attempts'}
+                      {attempts.length} {attempts.length === 1 ? 'Попытка' : 'Попытки'}
                   </div>
               </div>
               
@@ -737,7 +745,7 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
                                   {selectedAttemptIndex === idx && <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/></svg>}
                               </div>
                               <div>
-                                  <p className="font-bold text-slate-700">Attempt {idx + 1}</p>
+                                  <p className="font-bold text-slate-700">Попытка {idx + 1}</p>
                                   <p className="text-[10px] text-slate-400 uppercase font-bold tracking-tight">{att.timestamp}</p>
                               </div>
                           </div>
@@ -757,11 +765,11 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
                                   }}
                                   className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 px-6 py-4 rounded-2xl font-bold transition-all active:scale-95"
                               >
-                                  Rerecord
+                                  Перезаписать
                               </button>
                           ) : (
                               <div className="flex-1 bg-slate-50 text-slate-400 px-6 py-4 rounded-2xl font-bold text-center border border-dashed border-slate-200 cursor-not-allowed">
-                                  No more attempts
+                                  Попытки исчерпаны
                               </div>
                           )}
                           <button 
@@ -769,7 +777,7 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
                               className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-4 rounded-2xl font-bold shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2"
                           >
                               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                              Submit to Teacher
+                              Отправить на проверку
                           </button>
                           {story.speakingType === 'read-aloud' && (
                               <button 
@@ -777,16 +785,16 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
                                   className="flex-1 bg-indigo-500 hover:bg-indigo-600 text-white px-6 py-4 rounded-2xl font-bold shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2"
                               >
                                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                  Check with AI
+                                  Проверить с ИИ
                               </button>
                           )}
                       </div>
                   )}
                   <div className="bg-amber-50 border border-amber-100 p-3 rounded-xl">
                       <p className="text-xs text-amber-700 text-center leading-relaxed">
-                          <span className="font-bold">Note:</span> {canRerecord ? "You can rerecord only once." : "You have used your single rerecord attempt."}
+                          <span className="font-bold">Примечание:</span> {canRerecord ? "Вы можете перезаписать только один раз." : "Вы использовали свою единственную попытку перезаписи."}
                           {attempts.length > 1 && selectedAttemptIndex === null && (
-                              <span className="block mt-1 font-medium">Both recordings will be submitted if you don't choose one.</span>
+                              <span className="block mt-1 font-medium">Если вы не выберете одну, будут отправлены обе записи.</span>
                           )}
                       </p>
                   </div>
@@ -839,6 +847,55 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
 
   const checkAnswers = () => {
     if (type === ExerciseType.WRITING || type === ExerciseType.SPEAKING || type === ExerciseType.ORAL_SPEECH) {
+        return;
+    }
+
+    let missingKey: string | null = null;
+
+    const checkStoryInputs = (s: Story, prefix: string = '') => {
+        if (missingKey) return;
+
+        if (s.texts && s.readingAnswers) {
+            for (const text of s.texts) {
+                const key = prefix + text.letter;
+                if (!inputs[key]) {
+                    missingKey = key;
+                    return;
+                }
+            }
+        } else if (s.questions) {
+            for (const q of s.questions) {
+                const key = prefix + q.id;
+                if (!inputs[key]) {
+                    missingKey = key;
+                    return;
+                }
+            }
+        } else if (s.tasks) {
+            for (let i = 0; i < s.tasks.length; i++) {
+                const key = prefix + i.toString();
+                if (!inputs[key] || inputs[key].trim() === '') {
+                    missingKey = key;
+                    return;
+                }
+            }
+        }
+    };
+
+    if (story.subStories) {
+        story.subStories.forEach((subStory, index) => {
+            checkStoryInputs(subStory, `section_${index}_`);
+        });
+    } else {
+        checkStoryInputs(story);
+    }
+
+    if (missingKey) {
+        setHighlightedField(missingKey);
+        const element = document.getElementById(`input-${missingKey}`);
+        if (element) {
+            element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
         return;
     }
 
@@ -927,6 +984,43 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
   const handleCheckSection = (index: number) => {
       const subStory = story.subStories![index];
       const prefix = `section_${index}_`;
+      
+      let missingKey: string | null = null;
+      if (subStory.texts && subStory.readingAnswers) {
+          for (const text of subStory.texts) {
+              const key = prefix + text.letter;
+              if (!inputs[key]) {
+                  missingKey = key;
+                  break;
+              }
+          }
+      } else if (subStory.questions) {
+          for (const q of subStory.questions) {
+              const key = prefix + q.id;
+              if (!inputs[key]) {
+                  missingKey = key;
+                  break;
+              }
+          }
+      } else if (subStory.tasks) {
+          for (let i = 0; i < subStory.tasks.length; i++) {
+              const key = prefix + i.toString();
+              if (!inputs[key] || inputs[key].trim() === '') {
+                  missingKey = key;
+                  break;
+              }
+          }
+      }
+
+      if (missingKey) {
+          setHighlightedField(missingKey);
+          const element = document.getElementById(`input-${missingKey}`);
+          if (element) {
+              element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+          return;
+      }
+
       const newValidation = { ...validation };
 
       if (subStory.texts && subStory.readingAnswers) {
@@ -1222,7 +1316,7 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
 
       if (subtype === 'read-aloud') {
           return (
-              <div className="max-w-3xl mx-auto py-10">
+              <div className="max-w-5xl mx-auto py-10">
                   {speakingPhase === 'REVIEW' ? (
                       renderSpeakingReview()
                   ) : (
@@ -1238,40 +1332,40 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
                               {String(Math.floor(timer/60))}:{String(timer%60).padStart(2,'0')}
                           </div>
                           <div>
-                              <div className="text-xs text-slate-400 uppercase font-bold tracking-widest mb-1">Task 1: Read Aloud</div>
+                              <div className="text-xs text-slate-400 uppercase font-bold tracking-widest mb-1">Задание 1: Чтение вслух</div>
                               <div className="font-bold text-2xl text-slate-800">
-                                  {speakingPhase === 'IDLE' && 'Ready to start?'}
-                                  {speakingPhase === 'PREPARING' && 'Prepare...'}
-                                  {speakingPhase === 'COUNTDOWN' && 'Get ready!'}
-                                  {speakingPhase === 'RECORDING' && 'Recording!'}
-                                  {speakingPhase === 'UPLOADING' && 'Saving...'}
-                                  {speakingPhase === 'FINISHED' && 'Done'}
+                                  {speakingPhase === 'IDLE' && 'Готовы начать?'}
+                                  {speakingPhase === 'PREPARING' && 'Подготовка...'}
+                                  {speakingPhase === 'COUNTDOWN' && 'Приготовьтесь!'}
+                                  {speakingPhase === 'RECORDING' && 'Запись!'}
+                                  {speakingPhase === 'UPLOADING' && 'Сохранение...'}
+                                  {speakingPhase === 'FINISHED' && 'Готово'}
                               </div>
                           </div>
                       </div>
 
                       <div className="flex gap-4">
                           {speakingPhase === 'IDLE' && !readOnly && (
-                              <button onClick={startReadAloudPreparation} className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-4 rounded-2xl font-bold transition-all shadow-lg active:scale-95">Start Preparation</button>
+                              <button onClick={startReadAloudPreparation} className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-4 rounded-2xl font-bold transition-all shadow-lg active:scale-95">Начать подготовку</button>
                           )}
                           {speakingPhase === 'PREPARING' && !readOnly && (
-                              <button onClick={startReadAloudCountdown} className="bg-slate-200 hover:bg-slate-300 text-slate-600 px-6 py-4 rounded-2xl font-bold transition-all">Skip Prep</button>
+                              <button onClick={startReadAloudCountdown} className="bg-slate-200 hover:bg-slate-300 text-slate-600 px-6 py-4 rounded-2xl font-bold transition-all">Пропустить</button>
                           )}
                           {speakingPhase === 'COUNTDOWN' && !readOnly && (
-                              <div className="text-indigo-600 font-bold px-8 py-4">Starting in {timer}...</div>
+                              <div className="text-indigo-600 font-bold px-8 py-4">Начало через {timer}...</div>
                           )}
                           {/* After prep (IDLE again) show Start Recording */}
                           {speakingPhase === 'IDLE' && timer === 0 && !readOnly && (
-                              <button onClick={startReadAloudRecording} className="bg-emerald-500 hover:bg-emerald-600 text-white px-8 py-4 rounded-2xl font-bold transition-all shadow-lg active:scale-95">Start Recording</button>
+                              <button onClick={startReadAloudRecording} className="bg-emerald-500 hover:bg-emerald-600 text-white px-8 py-4 rounded-2xl font-bold transition-all shadow-lg active:scale-95">Начать запись</button>
                           )}
                           {speakingPhase === 'RECORDING' && !readOnly && (
-                              <button onClick={() => finishSpeaking()} className="bg-rose-500 hover:bg-rose-600 text-white px-8 py-4 rounded-2xl font-bold transition-all shadow-lg active:scale-95">Stop Recording</button>
+                              <button onClick={() => finishSpeaking()} className="bg-rose-500 hover:bg-rose-600 text-white px-8 py-4 rounded-2xl font-bold transition-all shadow-lg active:scale-95">Завершить запись</button>
                           )}
                       </div>
                       </div>
                   )}
                   <div className={`bg-white p-10 md:p-14 rounded-3xl shadow-sm border transition-all duration-500 ${speakingPhase === 'RECORDING' ? 'border-rose-200 ring-4 ring-rose-50' : 'border-slate-100'}`}>
-                      <p className="text-xl md:text-2xl leading-[2] text-slate-800 font-medium">{story.text}</p>
+                      <p className="text-lg md:text-xl leading-[2.2] tracking-wide text-slate-800 font-normal max-w-none mx-auto">{story.text}</p>
                   </div>
               </div>
           );
@@ -1496,7 +1590,7 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
                       {subStory.questions.map((q) => {
                           const key = prefix + q.id;
                           return (
-                              <div key={q.id} className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
+                              <div id={`input-${key}`} key={q.id} className={`bg-slate-50 p-6 rounded-2xl border border-slate-100 ${highlightedField === key ? 'ring-4 ring-rose-100 border-rose-500 animate-pulse' : ''}`}>
                                   <div className="flex gap-4 mb-4">
                                       <span className="font-bold text-cyan-500 text-lg">{q.id}.</span>
                                       <p className="font-medium text-slate-800">{q.text}</p>
@@ -1557,7 +1651,7 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
                               const correctAnswers = subStory.readingAnswers![speakerItem.letter] || [];
 
                               return (
-                                  <div key={speakerItem.letter} className="bg-white rounded-xl p-4 shadow-sm border border-slate-200">
+                                  <div id={`input-${key}`} key={speakerItem.letter} className={`bg-white rounded-xl p-4 shadow-sm border border-slate-200 ${highlightedField === key ? 'ring-4 ring-rose-100 border-rose-500 animate-pulse' : ''}`}>
                                       <div className="flex items-center justify-between mb-3">
                                           <div className="font-bold text-slate-800 flex items-center gap-3">
                                               <div className="w-8 h-8 rounded-full bg-slate-800 text-white flex items-center justify-center text-sm">
@@ -1619,6 +1713,7 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
                                           <td className="p-4 text-slate-800 font-medium">{task.word}</td>
                                           <td className="p-4 relative">
                                               <input
+                                                  id={`input-${key}`}
                                                   type="text"
                                                   value={inputs[key] || ''}
                                                   onChange={(e) => handleInputChange(key, e.target.value)}
@@ -1626,6 +1721,7 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
                                                   className={`w-full px-3 py-2 rounded-lg border-2 outline-none font-bold transition-all ${
                                                       isCorrect === true ? 'border-emerald-400 bg-emerald-50 text-emerald-800' :
                                                       isCorrect === false ? 'border-rose-400 bg-rose-50 text-rose-800' :
+                                                      highlightedField === key ? 'border-rose-500 ring-4 ring-rose-100 bg-rose-50 animate-pulse' :
                                                       'border-slate-200 focus:border-cyan-500 focus:bg-white'
                                                   } ${effectiveReadOnly ? 'opacity-70 cursor-not-allowed' : ''}`}
                                               />
@@ -1647,9 +1743,9 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
                   {!isSectionChecked && !readOnly && (
                       <button 
                           onClick={() => handleCheckSection(index)}
-                          className="bg-cyan-600 hover:bg-cyan-700 text-white px-5 py-2.5 rounded-xl font-bold text-sm transition-all shadow-md active:scale-95"
+                          className={`${highlightedField ? 'bg-rose-500 animate-pulse ring-4 ring-rose-200' : 'bg-cyan-600 hover:bg-cyan-700'} text-white px-5 py-2.5 rounded-xl font-bold text-sm transition-all shadow-md active:scale-95`}
                       >
-                          Check This Section
+                          {highlightedField ? 'Complete Section' : 'Check This Section'}
                       </button>
                   )}
                   {isSectionChecked && !showResults && (
@@ -1770,6 +1866,7 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
                   return (
                     <span key={partIndex} className="inline-block relative group align-middle mx-1.5">
                         <input 
+                            id={`input-${taskId}`}
                             type="text" 
                             value={userAnswer} 
                             onChange={(e) => handleInputChange(taskIndex.toString(), e.target.value)} 
@@ -1780,9 +1877,11 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
                                     ? 'bg-emerald-100 text-emerald-800 border-2 border-emerald-100' 
                                     : isCorrect === false 
                                         ? 'bg-rose-100 text-rose-800 border-2 border-rose-100' 
-                                        : hasValue
-                                            ? 'bg-indigo-50 text-indigo-700 border-2 border-indigo-100'
-                                            : 'bg-white text-slate-700 border-2 border-indigo-100 shadow-sm focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10'
+                                        : highlightedField === taskId
+                                            ? 'bg-rose-50 border-2 border-rose-500 ring-4 ring-rose-100 animate-pulse'
+                                            : hasValue
+                                                ? 'bg-indigo-50 text-indigo-700 border-2 border-indigo-100'
+                                                : 'bg-white text-slate-700 border-2 border-indigo-100 shadow-sm focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10'
                             } ${effectiveReadOnly ? 'opacity-90 cursor-default' : ''}`}
                             disabled={showResults || effectiveReadOnly} 
                             autoComplete="off" 
@@ -1810,8 +1909,11 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
         
         {!showResults && !effectiveReadOnly && (
             <div className="mt-12 flex justify-end">
-                <button onClick={checkAnswers} className="bg-slate-900 hover:bg-slate-800 text-white px-8 py-3 rounded-xl font-bold text-base transition-all shadow-lg hover:shadow-xl active:scale-95 flex items-center gap-2">
-                    <span>Check Answers</span>
+                <button 
+                    onClick={checkAnswers} 
+                    className={`${highlightedField ? 'bg-rose-500 animate-pulse ring-4 ring-rose-200' : 'bg-slate-900 hover:bg-slate-800'} text-white px-8 py-3 rounded-xl font-bold text-base transition-all shadow-lg hover:shadow-xl active:scale-95 flex items-center gap-2`}
+                >
+                    <span>{highlightedField ? 'Complete All Fields' : 'Check Answers'}</span>
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
                 </button>
             </div>
@@ -1840,7 +1942,7 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
                 const isCorrect = validation[textItem.letter];
                 const correctAnswers = story.readingAnswers![textItem.letter] || [];
                 return (
-                    <div key={textItem.letter} className="bg-white rounded-2xl p-8 shadow-sm border border-slate-100 relative group hover:shadow-md transition-shadow">
+                    <div id={`input-${textItem.letter}`} key={textItem.letter} className={`bg-white rounded-2xl p-8 shadow-sm border border-slate-100 relative group hover:shadow-md transition-shadow ${highlightedField === textItem.letter ? 'ring-4 ring-rose-100 border-rose-500 animate-pulse' : ''}`}>
                         <div className="absolute -left-4 -top-4 w-10 h-10 rounded-xl bg-slate-800 text-white flex items-center justify-center font-bold text-lg shadow-lg rotate-3 group-hover:rotate-6 transition-transform">
                             {textItem.letter}
                         </div>
@@ -1890,7 +1992,7 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
               <div className="lg:w-1/2 flex flex-col gap-4 overflow-y-auto custom-scrollbar pb-10">
                   {story.questions?.map((q) => {
                       return (
-                          <div key={q.id} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                          <div id={`input-${q.id}`} key={q.id} className={`bg-white p-6 rounded-2xl shadow-sm border border-slate-100 ${highlightedField === q.id.toString() ? 'ring-4 ring-rose-100 border-rose-500 animate-pulse' : ''}`}>
                               <div className="flex gap-4 mb-4">
                                   <span className="font-bold text-indigo-100 text-xl">{q.id}.</span>
                                   <p className="font-medium text-slate-800 text-lg">{q.text}</p>
@@ -1942,7 +2044,9 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
                    >
                        <span className="hidden md:inline text-[10px] font-bold text-slate-400 uppercase tracking-wider group-hover:text-indigo-500 transition-colors">Your Score</span>
                        <span className={`text-sm md:text-base font-bold px-3 py-1 rounded-full ${score === (viewingResult?.max_score || Object.keys(validation).length) ? 'bg-emerald-500 text-white shadow-md shadow-emerald-200' : 'bg-slate-100 text-slate-800'}`}>
-                           {score} / {viewingResult?.max_score || Object.keys(validation).length}
+                           {(type !== ExerciseType.WRITING && type !== ExerciseType.SPEAKING && type !== ExerciseType.ORAL_SPEECH) 
+                               ? `${score} / ${viewingResult?.max_score || Object.keys(validation).length}`
+                               : "Выполнено"}
                        </span>
                        <svg className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${isHistoryOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
@@ -1985,7 +2089,9 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
                                                        ? 'bg-emerald-100 text-emerald-700' 
                                                        : 'bg-slate-100 text-slate-500'
                                                }`}>
-                                                   {res.score}/{res.max_score}
+                                                   {(type !== ExerciseType.WRITING && type !== ExerciseType.SPEAKING && type !== ExerciseType.ORAL_SPEECH)
+                                                       ? `${res.score}/${res.max_score}`
+                                                       : "Done"}
                                                </span>
                                                {isSelected && <svg className="w-4 h-4 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
                                            </div>
@@ -2007,7 +2113,7 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
                                    }`}
                                >
                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
-                                   Start New Attempt
+                                   Сделать повторно
                                </button>
                            </div>
                        </div>
@@ -2083,8 +2189,11 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
 
                 {!showResults && !effectiveReadOnly && type !== ExerciseType.WRITING && type !== ExerciseType.SPEAKING && type !== ExerciseType.ORAL_SPEECH && type !== ExerciseType.LISTENING && type !== ExerciseType.GRAMMAR && type !== ExerciseType.VOCABULARY && (
                     <div className="mt-12 flex justify-center pb-20">
-                        <button onClick={checkAnswers} className="bg-slate-900 hover:bg-slate-800 text-white px-10 py-4 rounded-2xl font-bold text-lg transition-all shadow-xl hover:shadow-2xl hover:-translate-y-1 active:scale-95 flex items-center gap-3">
-                            <span>Check Answers</span>
+                        <button 
+                            onClick={checkAnswers} 
+                            className={`${highlightedField ? 'bg-rose-500 animate-pulse ring-4 ring-rose-200' : 'bg-slate-900 hover:bg-slate-800'} text-white px-10 py-4 rounded-2xl font-bold text-lg transition-all shadow-xl hover:shadow-2xl hover:-translate-y-1 active:scale-95 flex items-center gap-3`}
+                        >
+                            <span>{highlightedField ? 'Complete All Fields' : 'Check Answers'}</span>
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
                         </button>
                     </div>

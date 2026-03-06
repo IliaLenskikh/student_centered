@@ -13,6 +13,7 @@ interface ExerciseCardProps {
 }
 
 const ExerciseCard: React.FC<ExerciseCardProps> = ({ story, type, onClick, onRetry, isCompleted, result, readOnly }) => {
+  const isGraded = type !== ExerciseType.WRITING && type !== ExerciseType.SPEAKING && type !== ExerciseType.ORAL_SPEECH;
 
   const getThemeColors = () => {
     if (isCompleted) {
@@ -176,7 +177,7 @@ const ExerciseCard: React.FC<ExerciseCardProps> = ({ story, type, onClick, onRet
           <div className={`pt-4 border-t flex items-center justify-between mt-auto ${colors.divider}`}>
              <span className={`flex items-center gap-2 text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full ${colors.scoreBg}`}>
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                Score: {result.score} / {result.max_score}
+                {isGraded ? `Score: ${result.score} / ${result.max_score}` : "Выполнено"}
              </span>
              {onRetry && (
                  <button 
@@ -186,7 +187,7 @@ const ExerciseCard: React.FC<ExerciseCardProps> = ({ story, type, onClick, onRet
                     }}
                     className="text-xs font-bold text-slate-400 hover:text-slate-600 uppercase tracking-wider transition-colors px-2 py-1"
                  >
-                    Do Again
+                    Сделать повторно
                  </button>
              )}
           </div>
