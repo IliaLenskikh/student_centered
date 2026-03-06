@@ -50,6 +50,13 @@ export const mapSupabaseError = (error: any): AppError => {
         originalError: error
       };
     }
+    if (error.includes('Failed to fetch')) {
+        return {
+            message: "Unable to connect to the server. Please check your internet connection.",
+            code: 'NETWORK_ERROR',
+            originalError: error
+        };
+    }
     return {
       message: error,
       code: 'UNKNOWN_ERROR',
@@ -68,6 +75,14 @@ export const mapSupabaseError = (error: any): AppError => {
 
   // Fallback
   const message = error?.message || error?.error_description || "An unexpected error occurred";
+  
+  if (message === 'Failed to fetch') {
+      return {
+          message: "Unable to connect to the server. Please check your internet connection.",
+          code: 'NETWORK_ERROR',
+          originalError: error
+      };
+  }
   
   // Handle case where message is "{}" string
   if (message === '{}') {

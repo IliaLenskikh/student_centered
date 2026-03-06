@@ -151,7 +151,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (isLoginMode) {
         result = await supabase.auth.signInWithPassword({ email, password });
       } else {
-        result = await supabase.auth.signUp({ email, password });
+        result = await supabase.auth.signUp({ 
+          email, 
+          password,
+          options: {
+            emailRedirectTo: window.location.origin
+          }
+        });
       }
 
       if (result.error) throw result.error;
@@ -163,7 +169,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } catch (error: any) {
       console.error("Auth Error:", error);
-      setAuthError(getErrorMessage(error));
+      // Check for specific network error message from Supabase client
+      if (error.message === 'Failed to fetch') {
+          setAuthError("Unable to connect to the server. Please check your internet connection.");
+      } else {
+          setAuthError(getErrorMessage(error));
+      }
       throw error;
     }
   };
