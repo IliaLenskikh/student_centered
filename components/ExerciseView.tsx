@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Story, ExerciseType, UserProgress, ValidationState, UserProfile, AttemptDetail, StudentResult } from '../types';
 import { getExplanation, getWritingSuggestions, getSpeakingSuggestion, evaluateSpeaking, evaluateReadAloud } from '../services/geminiService';
 import { supabase } from '../services/supabaseClient';
+import { saveInputs, loadInputs, saveAudioAttempt, loadAudioAttempts, clearAudioAttempts, clearInputs } from '../services/storageService';
 import { ResultReview } from './ResultReview';
 
 interface ExerciseViewProps {
@@ -75,8 +76,31 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
   useEffect(() => {
       if (initialInputs) {
           setInputs(initialInputs);
+      } else if (!readOnly && !viewingResult) {
+          // Load saved progress
+          const savedInputs = loadInputs(story.title);
+          if (savedInputs) {
+              setInputs(prev => ({ ...prev, ...savedInputs }));
+              if (savedInputs.email) setEmailContent(savedInputs.email);
+          }
+
+          loadAudioAttempts(story.title).then(savedAttempts => {
+              if (savedAttempts && savedAttempts.length > 0) {
+                  const loadedAttempts = savedAttempts.map(att => ({
+                      blob: att.blob,
+                      url: URL.createObjectURL(att.blob),
+                      timestamp: att.timestamp
+                  }));
+                  setAttempts(loadedAttempts);
+                  if (loadedAttempts.length > 0) {
+                      setSpeakingPhase('REVIEW');
+                      // If we have attempts, select the first one by default
+                      setSelectedAttemptIndex(0);
+                  }
+              }
+          });
       }
-  }, [initialInputs]);
+  }, [initialInputs, story.title, readOnly, viewingResult]);
 
   // If viewingResult is present, we are in review mode
   const isReviewMode = !!viewingResult;
@@ -217,6 +241,7 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
   const [wordCount, setWordCount] = useState(0);
   const [isSubmittingWriting, setIsSubmittingWriting] = useState(false);
   const [lastSaved, setLastSaved] = useState<string | null>(null);
+  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'idle'>('idle');
 
   // AI State
   const [aiSuggestion, setAiSuggestion] = useState<string | null>(null);
@@ -479,6 +504,10 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
               }
               const url = URL.createObjectURL(blob);
               const timestamp = new Date().toLocaleTimeString();
+              
+              // Save to IndexedDB
+              saveAudioAttempt(story.title, blob, timestamp);
+
               setAttempts(prev => {
                   const newAttempts = [...prev, { blob, url, timestamp }];
                   if (newAttempts.length === 1) setSelectedAttemptIndex(0);
@@ -668,6 +697,10 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
 
           setSpeakingPhase('FINISHED');
           onComplete(10, 10, details);
+          
+          // Clear storage after successful submission
+          clearAudioAttempts(story.title);
+          clearInputs(story.title);
 
       } catch (e: any) {
           console.error("Upload error", e);
@@ -703,6 +736,12 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
   const handleInputChange = (key: string, value: string) => {
     const newInputs = { ...inputs, [key]: value };
     setInputs(newInputs);
+    if (!readOnly) {
+        setSaveStatus('saving');
+        saveInputs(story.title, newInputs);
+        setTimeout(() => setSaveStatus('saved'), 500);
+        setTimeout(() => setSaveStatus('idle'), 2000);
+    }
     broadcastTyping(key, value, newInputs, null);
     if (validation[key] !== undefined) {
       setValidation(prev => {
@@ -727,75 +766,77 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
       return (
           <div className="bg-white p-8 rounded-3xl shadow-xl border border-slate-100 mb-8 w-full max-w-2xl mx-auto">
               <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-xl font-bold text-slate-800">Прослушайте вашу запись</h3>
-                  <div className="px-3 py-1 bg-indigo-100 text-indigo-600 rounded-full text-xs font-bold uppercase tracking-wider">
+                  <h3 className="text-lg font-bold text-slate-800">Ваши записи</h3>
+                  <div className="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-xs font-bold uppercase tracking-wider">
                       {attempts.length} {attempts.length === 1 ? 'Попытка' : 'Попытки'}
                   </div>
               </div>
               
-              <div className="space-y-4 mb-8">
+              <div className="space-y-3 mb-8">
                   {attempts.map((att, idx) => (
                       <div 
                           key={idx} 
-                          className={`p-5 rounded-2xl border-2 transition-all cursor-pointer flex flex-col sm:flex-row items-center justify-between gap-4 ${selectedAttemptIndex === idx ? 'border-indigo-500 bg-indigo-50/50' : 'border-slate-100 hover:border-slate-200 bg-slate-50/30'}`}
+                          className={`p-4 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-4 group ${selectedAttemptIndex === idx ? 'border-indigo-500 bg-indigo-50/50 shadow-sm' : 'border-slate-100 hover:border-slate-300 bg-white'}`}
                           onClick={() => setSelectedAttemptIndex(idx)}
                       >
-                          <div className="flex items-center gap-4 w-full sm:w-auto">
-                              <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 ${selectedAttemptIndex === idx ? 'border-indigo-500 bg-indigo-500 text-white' : 'border-slate-300 bg-white'}`}>
-                                  {selectedAttemptIndex === idx && <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/></svg>}
+                          <div className="flex items-center gap-4">
+                              <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-colors ${selectedAttemptIndex === idx ? 'bg-indigo-500 text-white' : 'bg-slate-100 text-slate-400 group-hover:bg-slate-200'}`}>
+                                  {selectedAttemptIndex === idx ? (
+                                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/></svg>
+                                  ) : (
+                                      <span className="text-xs font-bold">{idx + 1}</span>
+                                  )}
                               </div>
                               <div>
-                                  <p className="font-bold text-slate-700">Попытка {idx + 1}</p>
-                                  <p className="text-[10px] text-slate-400 uppercase font-bold tracking-tight">{att.timestamp}</p>
+                                  <p className={`text-sm font-bold ${selectedAttemptIndex === idx ? 'text-indigo-900' : 'text-slate-700'}`}>Попытка {idx + 1}</p>
+                                  <p className="text-[10px] text-slate-400 font-medium">{att.timestamp}</p>
                               </div>
                           </div>
-                          <audio src={att.url} controls className="h-10 w-full sm:w-48" />
+                          <audio src={att.url} controls className="h-8 w-32 md:w-48 opacity-80 hover:opacity-100 transition-opacity" />
                       </div>
                   ))}
               </div>
 
-              <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-3">
                   {!readOnly && (
-                      <div className="flex flex-col sm:flex-row gap-4">
+                      <div className="flex gap-3">
                           {canRerecord ? (
                               <button 
                                   onClick={() => {
                                       setSpeakingPhase('IDLE');
                                       setTimer(0);
                                   }}
-                                  className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 px-6 py-4 rounded-2xl font-bold transition-all active:scale-95"
+                                  className="flex-1 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-4 py-3 rounded-xl font-bold text-sm transition-all active:scale-95"
                               >
                                   Перезаписать
                               </button>
                           ) : (
-                              <div className="flex-1 bg-slate-50 text-slate-400 px-6 py-4 rounded-2xl font-bold text-center border border-dashed border-slate-200 cursor-not-allowed">
+                              <div className="flex-1 bg-slate-50 text-slate-400 px-4 py-3 rounded-xl font-bold text-sm text-center border border-dashed border-slate-200 cursor-not-allowed">
                                   Попытки исчерпаны
                               </div>
                           )}
                           <button 
                               onClick={handleAudioUpload}
-                              className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-4 rounded-2xl font-bold shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2"
+                              className="flex-[2] bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-3 rounded-xl font-bold text-sm shadow-md hover:shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2"
                           >
-                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                              Отправить на проверку
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                              Отправить учителю
                           </button>
-                          {story.speakingType === 'read-aloud' && (
-                              <button 
-                                  onClick={handleEvaluateSpeaking}
-                                  className="flex-1 bg-indigo-500 hover:bg-indigo-600 text-white px-6 py-4 rounded-2xl font-bold shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2"
-                              >
-                                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                  Проверить с ИИ
-                              </button>
-                          )}
                       </div>
                   )}
-                  <div className="bg-amber-50 border border-amber-100 p-3 rounded-xl">
-                      <p className="text-xs text-amber-700 text-center leading-relaxed">
-                          <span className="font-bold">Примечание:</span> {canRerecord ? "Вы можете перезаписать только один раз." : "Вы использовали свою единственную попытку перезаписи."}
-                          {attempts.length > 1 && selectedAttemptIndex === null && (
-                              <span className="block mt-1 font-medium">Если вы не выберете одну, будут отправлены обе записи.</span>
-                          )}
+                  {story.speakingType === 'read-aloud' && !readOnly && (
+                      <button 
+                          onClick={handleEvaluateSpeaking}
+                          className="w-full bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 px-4 py-3 rounded-xl font-bold text-sm transition-all active:scale-95 flex items-center justify-center gap-2"
+                      >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                          Проверить с ИИ (Beta)
+                      </button>
+                  )}
+                  
+                  <div className="mt-2 text-center">
+                      <p className="text-[10px] text-slate-400">
+                          {canRerecord ? "Доступна 1 перезапись." : "Лимит перезаписей исчерпан."}
                       </p>
                   </div>
               </div>
@@ -806,6 +847,12 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
   const handleEmailChange = (text: string) => {
       setEmailContent(text);
       const newInputs = { ...inputs, email: text };
+      if (!readOnly) {
+          setSaveStatus('saving');
+          saveInputs(story.title, newInputs);
+          setTimeout(() => setSaveStatus('saved'), 500);
+          setTimeout(() => setSaveStatus('idle'), 2000);
+      }
       broadcastTyping("email", text, newInputs, null);
       const count = text.trim() === '' ? 0 : text.trim().split(/\s+/).filter(w => w.length > 0).length;
       setWordCount(count);
@@ -837,6 +884,7 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
         
         onComplete(0, 10, details);
         setSpeakingPhase('FINISHED'); 
+        clearInputs(story.title);
     } catch (e) {
         console.error("Submission failed", e);
         alert("Failed to submit. Please try again.");
@@ -2026,45 +2074,72 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
   };
 
   return (
-    <div className="pb-10">
-      <div className="max-w-7xl mx-auto px-4 py-6 flex items-center justify-between relative z-50">
-        <button onClick={onBack} className="flex items-center text-slate-500 hover:text-slate-800 transition-colors group px-3 py-2 rounded-xl hover:bg-white hover:shadow-sm">
-          <div className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center mr-3 group-hover:border-indigo-200 group-hover:text-indigo-600 transition-colors shadow-sm">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
-          </div>
-          <span className="font-bold text-sm">Back to List</span>
-        </button>
-        
-        <div className="flex items-center gap-4">
-           {(showResults || isReviewMode) && (
-               <div className="relative" ref={historyDropdownRef}>
-                   <button 
-                       onClick={() => setIsHistoryOpen(!isHistoryOpen)}
-                       className="flex items-center gap-3 bg-white pl-4 pr-3 py-1.5 rounded-full border border-slate-100 shadow-sm hover:bg-slate-50 transition-colors group"
-                   >
-                       <span className="hidden md:inline text-[10px] font-bold text-slate-400 uppercase tracking-wider group-hover:text-indigo-500 transition-colors">Your Score</span>
-                       <span className={`text-sm md:text-base font-bold px-3 py-1 rounded-full ${score === (viewingResult?.max_score || Object.keys(validation).length) ? 'bg-emerald-500 text-white shadow-md shadow-emerald-200' : 'bg-slate-100 text-slate-800'}`}>
-                           {(type !== ExerciseType.WRITING && type !== ExerciseType.SPEAKING && type !== ExerciseType.ORAL_SPEECH) 
-                               ? `${score} / ${viewingResult?.max_score || Object.keys(validation).length}`
-                               : "Выполнено"}
-                       </span>
-                       <svg className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${isHistoryOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                           <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                       </svg>
-                   </button>
+    <div className="pb-10 min-h-screen bg-slate-50 font-sans text-slate-900">
+      {/* Sticky Header */}
+      <div className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-200 shadow-sm transition-all duration-300">
+          <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+            <div className="flex items-center gap-4">
+                <button 
+                    onClick={onBack} 
+                    className="p-2 -ml-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-full transition-all"
+                    title="Back to Menu"
+                >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                </button>
+                
+                <div className="flex flex-col">
+                    <h1 className="text-sm font-bold text-slate-800 leading-tight line-clamp-1 md:text-base">{story.title}</h1>
+                    <div className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                        <span>{type.replace('_', ' ')}</span>
+                        {saveStatus !== 'idle' && (
+                            <span className={`flex items-center gap-1 transition-opacity duration-300 ${saveStatus === 'saving' ? 'opacity-100' : 'opacity-100'}`}>
+                                <span className="w-1 h-1 rounded-full bg-slate-300"></span>
+                                {saveStatus === 'saving' ? (
+                                    <span className="text-indigo-500 flex items-center gap-1">
+                                        <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                        Saving...
+                                    </span>
+                                ) : (
+                                    <span className="text-emerald-500 flex items-center gap-1 animate-in fade-in slide-in-from-left-1 duration-300">
+                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                                        Saved
+                                    </span>
+                                )}
+                            </span>
+                        )}
+                    </div>
+                </div>
+            </div>
+            
+            <div className="flex items-center gap-3">
+               {(showResults || isReviewMode) && (
+                   <div className="relative" ref={historyDropdownRef}>
+                       <button 
+                           onClick={() => setIsHistoryOpen(!isHistoryOpen)}
+                           className="flex items-center gap-2 bg-slate-50 pl-3 pr-2 py-1.5 rounded-full border border-slate-200 hover:border-indigo-200 hover:bg-white transition-all group"
+                       >
+                           <span className={`text-sm font-bold px-2.5 py-0.5 rounded-full ${score === (viewingResult?.max_score || Object.keys(validation).length) ? 'bg-emerald-500 text-white shadow-sm' : 'bg-slate-200 text-slate-700'}`}>
+                               {(type !== ExerciseType.WRITING && type !== ExerciseType.SPEAKING && type !== ExerciseType.ORAL_SPEECH) 
+                                   ? `${score}/${viewingResult?.max_score || Object.keys(validation).length}`
+                                   : "Готово"}
+                           </span>
+                           <svg className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${isHistoryOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                               <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                           </svg>
+                       </button>
 
                    {isHistoryOpen && (
                        <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-2xl shadow-xl border border-slate-100 p-2 z-50 animate-in fade-in zoom-in-95 duration-200 origin-top-right">
                            <div className="flex items-center justify-between px-3 py-2 mb-1">
-                               <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Attempt History</span>
-                               <span className="text-[10px] font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">{history.length} total</span>
+                               <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">История попыток</span>
+                               <span className="text-[10px] font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">{history.length} всего</span>
                            </div>
                            
                            <div className="max-h-[300px] overflow-y-auto custom-scrollbar space-y-1 mb-2 pr-1">
                                {history.map((res, idx) => {
                                    const isSelected = viewingResult?.id === res.id;
                                    const attemptNum = history.length - idx;
-                                   const date = new Date(res.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+                                   const date = new Date(res.created_at).toLocaleDateString('ru-RU', { month: 'short', day: 'numeric' });
                                    
                                    return (
                                        <button
@@ -2080,7 +2155,7 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
                                            }`}
                                        >
                                            <div className="flex flex-col">
-                                               <span className="font-bold">Attempt {attemptNum}</span>
+                                               <span className="font-bold">Попытка {attemptNum}</span>
                                                <span className="text-[10px] text-slate-400 font-medium">{date}</span>
                                            </div>
                                            <div className="flex items-center gap-2">
@@ -2113,7 +2188,7 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
                                    }`}
                                >
                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
-                                   Сделать повторно
+                                   Повторить
                                </button>
                            </div>
                        </div>
@@ -2122,6 +2197,7 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
            )}
 
         </div>
+      </div>
       </div>
       
       <div className="max-w-7xl mx-auto px-4 mb-8 text-center">

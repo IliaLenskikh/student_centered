@@ -175,9 +175,9 @@ const ExerciseCard: React.FC<ExerciseCardProps> = ({ story, type, onClick, onRet
 
       {isCompleted && result && (
           <div className={`pt-4 border-t flex items-center justify-between mt-auto ${colors.divider}`}>
-             <span className={`flex items-center gap-2 text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full ${colors.scoreBg}`}>
+             <span className={`flex items-center gap-2 text-xs font-bold uppercase tracking-wider px-3 py-1.5 rounded-full ${colors.scoreBg}`}>
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                {isGraded ? `Score: ${result.score} / ${result.max_score}` : "Выполнено"}
+                {isGraded ? `${result.score} / ${result.max_score}` : "Выполнено"}
              </span>
              {onRetry && (
                  <button 
@@ -185,9 +185,10 @@ const ExerciseCard: React.FC<ExerciseCardProps> = ({ story, type, onClick, onRet
                         e.stopPropagation();
                         onRetry();
                     }}
-                    className="text-xs font-bold text-slate-400 hover:text-slate-600 uppercase tracking-wider transition-colors px-2 py-1"
+                    className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 hover:text-indigo-600 uppercase tracking-wider transition-colors px-3 py-1.5 rounded-full hover:bg-indigo-50 group"
                  >
-                    Сделать повторно
+                    <svg className="w-3.5 h-3.5 group-hover:rotate-180 transition-transform duration-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                    Повторить
                  </button>
              )}
           </div>
