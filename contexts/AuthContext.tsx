@@ -151,6 +151,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (isLoginMode) {
         result = await supabase.auth.signInWithPassword({ email, password });
       } else {
+        console.log("Starting sign up process...");
+        const startTime = Date.now();
         result = await supabase.auth.signUp({ 
           email, 
           password,
@@ -158,6 +160,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             emailRedirectTo: window.location.origin
           }
         });
+        console.log(`Sign up completed in ${Date.now() - startTime}ms`);
       }
 
       if (result.error) throw result.error;

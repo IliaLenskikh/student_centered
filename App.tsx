@@ -177,11 +177,19 @@ export default function App() {
     if (loading) return;
     
     setLoading(true);
+    
+    // Safety timeout to prevent infinite loading state
+    const timeoutId = setTimeout(() => {
+        setLoading(false);
+        showToast("Request timed out. Please check your connection or try again.", "error");
+    }, 15000); // 15 seconds timeout
+
     try {
       await contextHandleAuth(email, password, isLoginMode);
     } catch (error: any) {
       // Error is handled in context
     } finally {
+      clearTimeout(timeoutId);
       setLoading(false);
     }
   };
