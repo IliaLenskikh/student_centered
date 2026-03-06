@@ -43,6 +43,13 @@ export const mapSupabaseError = (error: any): AppError => {
 
   // Handle string errors
   if (typeof error === 'string') {
+    if (error === '{}' || !error.trim()) {
+      return {
+        message: "An unexpected error occurred. Please try again.",
+        code: 'UNKNOWN_ERROR',
+        originalError: error
+      };
+    }
     return {
       message: error,
       code: 'UNKNOWN_ERROR',
@@ -50,9 +57,29 @@ export const mapSupabaseError = (error: any): AppError => {
     };
   }
 
+  // Check for empty object
+  if (typeof error === 'object' && error !== null && Object.keys(error).length === 0) {
+    return {
+      message: "An unexpected error occurred. Please check your connection.",
+      code: 'UNKNOWN_ERROR',
+      originalError: error
+    };
+  }
+
   // Fallback
+  const message = error?.message || error?.error_description || "An unexpected error occurred";
+  
+  // Handle case where message is "{}" string
+  if (message === '{}') {
+      return {
+        message: "An unexpected error occurred. Please try again.",
+        code: error?.code || 'UNKNOWN_ERROR',
+        originalError: error
+      };
+  }
+
   return {
-    message: error?.message || error?.error_description || "An unexpected error occurred",
+    message: message,
     code: error?.code || 'UNKNOWN_ERROR',
     originalError: error
   };

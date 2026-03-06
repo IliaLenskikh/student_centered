@@ -189,8 +189,12 @@ export const AppRouter: React.FC<AppRouterProps> = (props) => {
           <div className="bg-white p-8 md:p-12 rounded-3xl shadow-xl w-full max-w-md border border-slate-100 relative overflow-hidden">
             <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-indigo-500 to-purple-500"></div>
             <div className="text-center mb-10">
-              <h1 className="text-3xl font-extrabold text-slate-900 mb-2">Welcome Back</h1>
-              <p className="text-slate-500">Sign in to continue your progress</p>
+              <h1 className="text-3xl font-extrabold text-slate-900 mb-2">
+                {isLoginMode ? 'Welcome Back' : 'Create Account'}
+              </h1>
+              <p className="text-slate-500">
+                {isLoginMode ? 'Sign in to continue your progress' : 'Start your learning journey today'}
+              </p>
             </div>
             
             {authError && (
