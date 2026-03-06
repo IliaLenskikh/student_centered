@@ -21,31 +21,36 @@ export const ExerciseList: React.FC<ExerciseListProps> = ({
   onGoHome,
   readOnly,
 }) => {
-  let title = 'Grammar';
-  let subtitle = 'Tenses & Forms';
+  let title = 'Грамматическая сторона речи';
+  let subtitle = 'Прочитайте текст и выполните задания.';
+  let instruction = '';
+  
+  if (type === ExerciseType.GRAMMAR) {
+    instruction = 'Прочитайте приведённый ниже текст. Преобразуйте слова, напечатанные заглавными буквами в конце строк, обозначенных номерами 20–28, так, чтобы они грамматически соответствовали содержанию текста. Заполните пропуски полученными словами. Каждый пропуск соответствует отдельному заданию 20–28.';
+  }
   if (type === ExerciseType.VOCABULARY) {
-    title = 'Vocabulary';
-    subtitle = 'Word Formation';
+    title = 'Лексическая сторона речи';
+    subtitle = 'Словообразование';
   }
   if (type === ExerciseType.READING) {
-    title = 'Reading';
-    subtitle = 'Text Comprehension';
+    title = 'Смысловое чтение';
+    subtitle = 'Понимание текста';
   }
   if (type === ExerciseType.LISTENING) {
-    title = 'Listening';
-    subtitle = 'Audio Tasks';
+    title = 'Аудирование';
+    subtitle = 'Задания по аудированию';
   }
   if (type === ExerciseType.SPEAKING) {
-    title = 'Read Aloud';
-    subtitle = 'Phonetics';
+    title = 'Фонетическая сторона речи';
+    subtitle = 'Чтение вслух';
   }
   if (type === ExerciseType.ORAL_SPEECH) {
-    title = 'Speaking';
-    subtitle = 'Interview & Monologue';
+    title = 'Говорение';
+    subtitle = 'Дайте развернутый ответ.';
   }
   if (type === ExerciseType.WRITING) {
-    title = 'Writing';
-    subtitle = 'Personal Email';
+    title = 'Письменная речь';
+    subtitle = 'Личное электронное письмо';
   }
 
   return (
@@ -70,11 +75,21 @@ export const ExerciseList: React.FC<ExerciseListProps> = ({
               />
             </svg>
           </button>
-          <div>
-            <h2 className="text-3xl md:text-4xl font-bold text-slate-900 tracking-tight leading-tight">
+          <div className="flex flex-col gap-4 max-w-5xl">
+            <h2 className="text-3xl md:text-5xl font-bold text-slate-900 tracking-tight leading-tight">
               {title}
             </h2>
-            <p className="text-slate-500 font-medium text-lg">{subtitle}</p>
+            {instruction && (
+              <div className="relative max-w-4xl">
+                <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-indigo-500/10 rounded-full"></div>
+                <p className="text-slate-400 text-[11px] md:text-xs leading-relaxed font-normal pl-6 italic tracking-wide font-serif">
+                  {instruction}
+                </p>
+              </div>
+            )}
+            {type !== ExerciseType.GRAMMAR && (
+              <p className="text-slate-500 font-medium text-lg">{subtitle}</p>
+            )}
           </div>
         </div>
       </div>

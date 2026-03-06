@@ -120,16 +120,25 @@ const ExerciseCard: React.FC<ExerciseCardProps> = ({ story, type, onClick, onRet
   const colors = getThemeColors();
 
   const getPreviewText = () => {
+    let text = "";
     if (type === ExerciseType.WRITING) {
-        return story.emailSubject || "Write an email...";
+        text = story.emailSubject || "Write an email...";
+    } else if (type === ExerciseType.READING || type === ExerciseType.SPEAKING || type === ExerciseType.ORAL_SPEECH || type === ExerciseType.LISTENING) {
+        if (story.text) text = story.text;
+        else if (story.texts && story.texts.length > 0) text = story.texts[0].content;
+        else if (type === ExerciseType.LISTENING) text = "Audio task. Listen and answer.";
+    } else {
+        text = story.template && story.template.length > 0 ? story.template[0].replace(/\{0\}/g, '...') : "Exercise details...";
     }
-    if (type === ExerciseType.READING || type === ExerciseType.SPEAKING || type === ExerciseType.ORAL_SPEECH || type === ExerciseType.LISTENING) {
-        if (story.text) return story.text;
-        if (story.texts && story.texts.length > 0) return story.texts[0].content;
-        if (type === ExerciseType.LISTENING) return "Audio task. Listen and answer.";
+
+    // Don't repeat the title in the preview
+    if (text.trim().toLowerCase() === story.title.trim().toLowerCase()) {
+        return "";
     }
-    return story.template && story.template.length > 0 ? story.template[0].replace(/\{0\}/g, '...') : "Exercise details...";
+    return text;
   }
+
+  const previewText = getPreviewText();
 
   return (
     <div 
@@ -140,8 +149,15 @@ const ExerciseCard: React.FC<ExerciseCardProps> = ({ story, type, onClick, onRet
       <div className="flex-1">
         <div className="flex justify-between items-start mb-4">
             <span className={`inline-block px-3 py-1 rounded-xl text-[10px] font-bold uppercase tracking-wider ${colors.badge}`}>
-                {type === ExerciseType.READING && story.questions ? 'True/False' : 
-                 type === ExerciseType.ORAL_SPEECH ? (story.speakingType === 'interview' ? 'Interview' : 'Monologue') : type}
+                {type === ExerciseType.READING && story.questions ? 'ВЕРНО/НЕВЕРНО' : 
+                 type === ExerciseType.ORAL_SPEECH ? (story.speakingType === 'interview' ? 'ИНТЕРВЬЮ' : 'МОНОЛОГ') : 
+                 type === ExerciseType.GRAMMAR ? 'ГРАММАТИЧЕСКАЯ СТОРОНА РЕЧИ' :
+                 type === ExerciseType.VOCABULARY ? 'ЛЕКСИЧЕСКАЯ СТОРОНА РЕЧИ' :
+                 type === ExerciseType.READING ? 'СМЫСЛОВОЕ ЧТЕНИЕ' :
+                 type === ExerciseType.SPEAKING ? 'ФОНЕТИЧЕСКАЯ СТОРОНА РЕЧИ' :
+                 type === ExerciseType.WRITING ? 'ПИСЬМЕННАЯ РЕЧЬ' :
+                 type === ExerciseType.LISTENING ? 'АУДИРОВАНИЕ' :
+                 type}
             </span>
         </div>
         
@@ -149,9 +165,11 @@ const ExerciseCard: React.FC<ExerciseCardProps> = ({ story, type, onClick, onRet
           {story.title}
         </h3>
         
-        <p className={`text-sm leading-relaxed line-clamp-3 mb-4 font-medium ${colors.desc}`}>
-          {getPreviewText()}
-        </p>
+        {previewText && (
+          <p className={`text-sm leading-relaxed line-clamp-3 mb-4 font-medium ${colors.desc}`}>
+            {previewText}
+          </p>
+        )}
       </div>
 
       {isCompleted && result && (

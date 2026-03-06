@@ -87,7 +87,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                     <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
                         <h3 className="font-bold text-xl text-slate-800 flex items-center gap-2">
                             <svg className="w-6 h-6 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
-                            AI Progress Analysis
+                            ИИ Анализ Прогресса
                         </h3>
                         <button onClick={() => setShowReportModal(false)} className="text-slate-400 hover:text-slate-600 transition-colors">
                             <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
@@ -98,8 +98,8 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                             <div className="flex flex-col items-center justify-center py-12 space-y-6">
                                 <div className="w-16 h-16 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
                                 <div className="text-center">
-                                    <p className="text-lg font-bold text-slate-700 mb-2">Analyzing your performance...</p>
-                                    <p className="text-slate-500 text-sm">Reviewing your recent exercises and identifying patterns.</p>
+                                    <p className="text-lg font-bold text-slate-700 mb-2">Анализируем ваши результаты...</p>
+                                    <p className="text-slate-500 text-sm">Изучаем последние задания и выявляем закономерности.</p>
                                 </div>
                             </div>
                         ) : progressReport ? (
@@ -107,41 +107,41 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                                 <div>
                                     <h4 className="text-sm font-bold text-emerald-600 uppercase tracking-wider mb-3 flex items-center gap-2">
                                         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                        Your Strengths
+                                        Ваши сильные стороны
                                     </h4>
                                     <div className="flex flex-wrap gap-2">
                                         {progressReport.strengths.length > 0 ? progressReport.strengths.map((s, i) => (
                                             <span key={i} className="px-3 py-1 bg-emerald-50 text-emerald-700 rounded-full text-sm font-medium border border-emerald-100">{s}</span>
-                                        )) : <span className="text-slate-400 italic">Keep practicing to build strengths!</span>}
+                                        )) : <span className="text-slate-400 italic">Продолжайте заниматься, чтобы укрепить свои навыки!</span>}
                                     </div>
                                 </div>
 
                                 <div>
                                     <h4 className="text-sm font-bold text-rose-500 uppercase tracking-wider mb-3 flex items-center gap-2">
                                         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-                                        Areas for Improvement
+                                        Области для улучшения
                                     </h4>
                                     <div className="flex flex-wrap gap-2">
                                         {progressReport.weaknesses.length > 0 ? progressReport.weaknesses.map((w, i) => (
                                             <span key={i} className="px-3 py-1 bg-rose-50 text-rose-700 rounded-full text-sm font-medium border border-rose-100">{w}</span>
-                                        )) : <span className="text-slate-400 italic">No major weaknesses detected!</span>}
+                                        )) : <span className="text-slate-400 italic">Серьезных пробелов не обнаружено!</span>}
                                     </div>
                                 </div>
 
                                 <div className="bg-indigo-50 rounded-2xl p-6 border border-indigo-100">
                                     <h4 className="text-sm font-bold text-indigo-800 uppercase tracking-wider mb-3 flex items-center gap-2">
                                         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                                        AI Recommendation
+                                        Рекомендация ИИ
                                     </h4>
                                     <p className="text-indigo-900/80 leading-relaxed">{progressReport.recommendations}</p>
                                 </div>
                             </div>
                         ) : (
-                            <div className="text-center text-slate-500">No report available.</div>
+                            <div className="text-center text-slate-500">Отчет недоступен.</div>
                         )}
                     </div>
                     <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end">
-                        <button onClick={() => setShowReportModal(false)} className="px-6 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold hover:bg-slate-50 transition-colors">Close</button>
+                        <button onClick={() => setShowReportModal(false)} className="px-6 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold hover:bg-slate-50 transition-colors">Закрыть</button>
                     </div>
                 </div>
             </div>
@@ -150,10 +150,10 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
         <div className="mb-8 flex flex-col md:flex-row items-end justify-between gap-4">
             <div>
                 <h1 className="text-3xl md:text-4xl font-bold text-slate-800 mb-2 tracking-tight">
-                Hello, {userProfile.name || 'Student'}! 👋
+                Привет, {userProfile.name || 'Студент'}! 👋
                 </h1>
-                <p className="text-slate-500 font-medium">
-                Ready to master your English skills today?
+                <p className="text-slate-500 font-medium max-w-3xl leading-relaxed">
+                Все материалы, представленные здесь, являются официальными материалами, одобренными ФИПИ для подготовки к Основному государственному экзамену (ОГЭ) по английскому языку.
                 </p>
             </div>
         </div>
@@ -166,18 +166,18 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 
                 <div className="relative z-10 flex items-start justify-between">
                     <div>
-                        <h2 className="text-xl font-bold mb-1">Your Progress</h2>
-                        <p className="text-indigo-100 text-xs font-medium opacity-90">Keep up the great work!</p>
+                        <h2 className="text-xl font-bold mb-1">Ваш прогресс</h2>
+                        <p className="text-indigo-100 text-xs font-medium opacity-90">Продолжайте в том же духе!</p>
                     </div>
                     <div className="bg-white/20 backdrop-blur-md px-3 py-1 rounded-full border border-white/10">
-                        <span className="text-[10px] font-bold tracking-wider uppercase">{stats.progressPercentage}% Complete</span>
+                        <span className="text-[10px] font-bold tracking-wider uppercase">{stats.progressPercentage}% Завершено</span>
                     </div>
                 </div>
 
                 <div className="relative z-10 mt-4">
                     <div className="flex items-end gap-2 mb-2">
                         <span className="text-4xl font-bold">{stats.totalCompleted}</span>
-                        <span className="text-sm text-indigo-200 font-medium mb-1.5">/ {stats.totalTasks} tasks</span>
+                        <span className="text-sm text-indigo-200 font-medium mb-1.5">/ {stats.totalTasks} заданий</span>
                     </div>
                     <div className="w-full bg-black/20 rounded-full h-1.5 overflow-hidden">
                         <div 
@@ -203,12 +203,12 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                     <div className="w-8 h-8 rounded-full bg-rose-100 flex items-center justify-center text-rose-500 mb-3">
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
                     </div>
-                    <h3 className="text-lg font-bold text-slate-800 mb-0.5">AI Analysis</h3>
-                    <p className="text-slate-500 text-xs">Get personalized insights</p>
+                    <h3 className="text-lg font-bold text-slate-800 mb-0.5">ИИ Анализ</h3>
+                    <p className="text-slate-500 text-xs">Получите персональные рекомендации</p>
                 </div>
 
                 <div className="mt-2 flex items-center gap-2 text-indigo-600 font-bold text-xs group-hover:translate-x-1 transition-transform">
-                    View Report
+                    Посмотреть отчет
                     <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
                 </div>
             </button>
@@ -216,8 +216,8 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <CategoryCard 
-                title="Grammar" 
-                subtitle="Tenses & Forms" 
+                title="Грамматическая сторона речи" 
+                subtitle="Прочитайте текст и выполните задания." 
                 stats={getCategoryStats(grammarStories)} 
                 onClick={() => handleCategoryClick('grammar')}
                 colorClass="text-indigo-600 bg-indigo-50"
@@ -226,8 +226,8 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 readOnly={readOnly}
             />
             <CategoryCard 
-                title="Vocabulary" 
-                subtitle="Word Formation" 
+                title="Лексическая сторона речи" 
+                subtitle="Словообразование" 
                 stats={getCategoryStats(vocabStories)}
                 onClick={() => handleCategoryClick('vocabulary')}
                 colorClass="text-teal-600 bg-teal-50"
@@ -236,8 +236,8 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 readOnly={readOnly}
             />
             <CategoryCard 
-                title="Reading" 
-                subtitle="Comprehension" 
+                title="Смысловое чтение" 
+                subtitle="Понимание текста" 
                 stats={getCategoryStats(allReadingStories)}
                 onClick={() => handleCategoryClick('reading')}
                 colorClass="text-amber-600 bg-amber-50"
@@ -246,8 +246,8 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 readOnly={readOnly}
             />
             <CategoryCard 
-                title="Listening" 
-                subtitle="Audio Tasks" 
+                title="Аудирование" 
+                subtitle="Задания по аудированию" 
                 stats={getCategoryStats(listeningStories)}
                 onClick={() => handleCategoryClick('listening')}
                 colorClass="text-cyan-600 bg-cyan-50"
@@ -256,8 +256,8 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 readOnly={readOnly}
             />
             <CategoryCard 
-                title="Read Aloud" 
-                subtitle="Phonetics" 
+                title="Фонетическая сторона речи" 
+                subtitle="Чтение вслух" 
                 stats={getCategoryStats(speakingStories)}
                 onClick={() => handleCategoryClick('speaking')}
                 colorClass="text-rose-600 bg-rose-50"
@@ -266,8 +266,8 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 readOnly={readOnly}
             />
             <CategoryCard 
-                title="Speaking" 
-                subtitle="Monologue" 
+                title="Говорение" 
+                subtitle="Дайте развернутый ответ." 
                 stats={getCategoryStats(allOralStories)}
                 onClick={() => handleCategoryClick('oral')}
                 colorClass="text-purple-600 bg-purple-50"
@@ -276,8 +276,8 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 readOnly={readOnly}
             />
             <CategoryCard 
-                title="Writing" 
-                subtitle="Email Task" 
+                title="Письменная речь" 
+                subtitle="Личное электронное письмо" 
                 stats={getCategoryStats(writingStories)}
                 onClick={() => handleCategoryClick('writing')}
                 colorClass="text-blue-600 bg-blue-50"

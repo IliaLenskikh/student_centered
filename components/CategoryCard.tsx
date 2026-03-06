@@ -58,21 +58,25 @@ export const CategoryCard: React.FC<CategoryCardProps> = ({
         )}
       </div>
 
-      <div
-        className={`p-3 rounded-xl bg-white/80 backdrop-blur-sm ${textColor} shadow-sm transition-transform group-hover:scale-110`}
-      >
-        {icon}
+      <div className="flex items-center gap-4 w-full">
+        <div
+          className={`p-3 rounded-xl bg-white/80 backdrop-blur-sm ${textColor} shadow-sm transition-transform group-hover:scale-110 shrink-0`}
+        >
+          {icon}
+        </div>
+        <p className={`text-[10px] font-bold ${textColor} uppercase tracking-wider leading-tight max-w-[150px] opacity-0 group-hover:opacity-100 transition-opacity duration-300`}>
+          {subtitle}
+        </p>
       </div>
 
       <div className="mt-auto pt-2 w-full flex items-end justify-between">
         <div>
-          <p className={`text-[10px] font-bold ${textColor} uppercase tracking-wider mb-0.5`}>{subtitle}</p>
           <h3 className="text-lg md:text-xl font-bold text-slate-800 leading-tight">
             {title}
           </h3>
         </div>
-        <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center shadow-sm group-hover:bg-slate-800 group-hover:text-white transition-colors">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>
+        <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-sm group-hover:bg-slate-800 group-hover:text-white transition-colors shrink-0 aspect-square">
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>
         </div>
       </div>
     </div>

@@ -367,9 +367,11 @@ export default function App() {
           {location.pathname !== '/' && location.pathname !== '/auth' && location.pathname !== '/forgot-password' && (
             <div 
                 onClick={handleBackNavigation}
-                className="fixed top-0 left-0 h-full w-12 md:w-16 z-40 cursor-pointer hover:bg-slate-400/10 transition-colors"
+                className="fixed top-0 left-0 h-full w-12 md:w-16 z-[100] cursor-pointer hover:bg-slate-400/5 transition-colors group"
                 title="Go Back"
-            />
+            >
+              <div className="absolute inset-y-0 left-0 w-1 bg-indigo-500/0 group-hover:bg-indigo-500/10 transition-colors" />
+            </div>
           )}
           
           <div className="flex-1 overflow-y-auto relative z-10 flex flex-col">
