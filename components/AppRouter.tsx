@@ -19,6 +19,8 @@ import { monologueStories } from '../data/monologue';
 import { listeningStories } from '../data/listening';
 import { CategoryCard } from './CategoryCard';
 import { ExerciseList } from './ExerciseList';
+import { ExamView } from './ExamView';
+import { ExamDashboard } from './ExamDashboard';
 import { getErrorMessage } from '../utils/errorHandling';
 
 const allReadingStories = [...readingStories, ...readingTrueFalseStories];
@@ -382,7 +384,10 @@ export const AppRouter: React.FC<AppRouterProps> = (props) => {
                 }}
                 completedStories={completedStories}
                 onNavigate={{
-                    toCategory: (type) => navigate(`/exercise/${type}`)
+                    toCategory: (type) => {
+                      if (type === 'exam') navigate('/exam');
+                      else navigate(`/exercise/${type}`);
+                    }
                 }}
             />
           </div>
@@ -466,6 +471,10 @@ export const AppRouter: React.FC<AppRouterProps> = (props) => {
           readOnly={false}
         />
       } />
+
+      <Route path="/exam" element={<ExamDashboard />} />
+      <Route path="/exam/start" element={<ExamView />} />
+      <Route path="/exam/:id" element={<ExamView />} />
 
       <Route path="/exercise/:type/:title" element={<ExerciseRouteWrapper {...props} />} />
 
