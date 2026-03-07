@@ -5,13 +5,10 @@ let aiClient: GoogleGenAI | null = null;
 
 // Initialize the client safely
 try {
-  // In Vite, process.env is not available on the client side.
-  // We use import.meta.env.VITE_GEMINI_API_KEY if it exists.
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-  if (apiKey) {
-    aiClient = new GoogleGenAI({ apiKey });
+  if (process.env.API_KEY) {
+    aiClient = new GoogleGenAI({ apiKey: process.env.API_KEY });
   } else {
-    console.warn("VITE_GEMINI_API_KEY environment variable is missing. AI features will be disabled.");
+    console.warn("API_KEY environment variable is missing. AI features will be disabled.");
   }
 } catch (error) {
   console.error("Failed to initialize Gemini client:", error);
