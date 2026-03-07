@@ -252,7 +252,7 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
   const [showAiModal, setShowAiModal] = useState(false);
   const [highlightedField, setHighlightedField] = useState<string | null>(null);
 
-  const getAIFeedback = async (index: number, audioUrl: string, taskContext: string) => {
+  const getAIFeedback = async (index: number, audioUrl: string, taskContext: string, questions?: string[]) => {
     setIsAnalyzing(prev => ({ ...prev, [index]: true }));
     setAiFeedbackStreaming(prev => ({ ...prev, [index]: '' }));
 
@@ -260,7 +260,7 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
       const response = await fetch('/api/analyze-speech', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ audioUrl, taskContext }),
+        body: JSON.stringify({ audioUrl, taskContext, questions }),
       });
 
       if (!response.body) throw new Error('No response body');
@@ -835,11 +835,12 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
                                   </div>
                               ) : (
                                   <button
-                                      onClick={() => getAIFeedback(idx, att.url, story.title)}
+                                      onClick={() => getAIFeedback(idx, att.url, story.title, story.speakingQuestions)}
                                       disabled={isAnalyzing[idx]}
-                                      className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 underline"
+                                      className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-lg text-xs font-bold transition-colors"
                                   >
-                                      {isAnalyzing[idx] ? 'Анализ...' : 'Получить ИИ фидбек'}
+                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                                      {isAnalyzing[idx] ? 'Анализ...' : 'Проверить с помощью ИИ'}
                                   </button>
                               )}
                           </div>
@@ -881,6 +882,20 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
                       >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                           Проверить с ИИ (Beta)
+                      </button>
+                  )}
+                  
+                  {story.speakingType === 'interview' && !readOnly && attempts.length > 0 && (
+                      <button 
+                          onClick={() => {
+                              const idx = selectedAttemptIndex !== null ? selectedAttemptIndex : attempts.length - 1;
+                              getAIFeedback(idx, attempts[idx].url, story.title, story.speakingQuestions);
+                          }}
+                          disabled={isAnalyzing[selectedAttemptIndex !== null ? selectedAttemptIndex : attempts.length - 1]}
+                          className="w-full mt-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 px-4 py-3 rounded-xl font-bold text-sm transition-all active:scale-95 flex items-center justify-center gap-2"
+                      >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                          {isAnalyzing[selectedAttemptIndex !== null ? selectedAttemptIndex : attempts.length - 1] ? 'Анализ аудио...' : 'Проверить с ИИ (Beta)'}
                       </button>
                   )}
                   

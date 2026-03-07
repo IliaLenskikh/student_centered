@@ -4,7 +4,8 @@
   "description": "Interactive OGE English Preparation App with AI Integration",
   "main": "index.tsx",
   "scripts": {
-    "start": "vite",
+    "start": "node server.ts",
+    "dev": "tsx server.ts",
     "build": "tsc && vite build",
     "lint": "tsc --noEmit",
     "preview": "vite preview"
@@ -22,12 +23,15 @@
   "dependencies": {
     "@google/genai": "^1.44.0",
     "@supabase/supabase-js": "^2.39.0",
+    "@types/express": "^5.0.6",
     "@vercel/node": "^5.6.11",
+    "express": "^5.2.1",
     "lucide-react": "^0.577.0",
     "openai": "^6.27.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-router-dom": "^7.13.0"
+    "react-router-dom": "^7.13.0",
+    "tsx": "^4.21.0"
   },
   "devDependencies": {
     "@types/react": "^18.2.0",
