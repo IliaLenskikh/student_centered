@@ -74,6 +74,40 @@ export const SpeakingSection: React.FC<SpeakingSectionProps> = ({ task1, task2, 
   const [t3Time, setT3Time] = useState(90);
   const t3TimerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // AI Feedback State
+  const [aiFeedback, setAiFeedback] = useState<Record<string, string>>({});
+  const [isAnalyzing, setIsAnalyzing] = useState<Record<string, boolean>>({});
+
+  const getAIFeedback = async (taskId: string, audioUrl: string, taskContext: string) => {
+    setIsAnalyzing(prev => ({ ...prev, [taskId]: true }));
+    setAiFeedback(prev => ({ ...prev, [taskId]: '' }));
+
+    try {
+      const response = await fetch('/api/analyze-speech', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ audioUrl, taskContext }),
+      });
+
+      if (!response.body) throw new Error('No response body');
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        setAiFeedback(prev => ({ ...prev, [taskId]: prev[taskId] + chunk }));
+      }
+    } catch (err) {
+      console.error(err);
+      setAiFeedback(prev => ({ ...prev, [taskId]: 'Ошибка при получении фидбека.' }));
+    } finally {
+      setIsAnalyzing(prev => ({ ...prev, [taskId]: false }));
+    }
+  };
+
   // Helper to format time
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
@@ -333,6 +367,25 @@ export const SpeakingSection: React.FC<SpeakingSectionProps> = ({ task1, task2, 
                               </button>
                             )}
                           </div>
+                          
+                          {/* AI Feedback Display */}
+                          {t2Answers[idx] && speakingUrls?.[`task2_${idx}`] && (
+                            <div className="mt-2">
+                              {aiFeedback[`task2_${idx}`] ? (
+                                <div className="p-3 bg-indigo-50 rounded-lg text-xs text-indigo-900 leading-relaxed">
+                                  {aiFeedback[`task2_${idx}`]}
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => getAIFeedback(`task2_${idx}`, speakingUrls[`task2_${idx}`], q)}
+                                  disabled={isAnalyzing[`task2_${idx}`]}
+                                  className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 underline"
+                                >
+                                  {isAnalyzing[`task2_${idx}`] ? 'Анализ...' : 'Получить ИИ фидбек'}
+                                </button>
+                              )}
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>

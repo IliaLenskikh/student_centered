@@ -247,8 +247,40 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
   const [aiSuggestion, setAiSuggestion] = useState<string | null>(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [aiFeedback, setAiFeedback] = useState<{score?: number, feedback?: string, mistakes?: string[]} | null>(null);
+  const [aiFeedbackStreaming, setAiFeedbackStreaming] = useState<Record<number, string>>({});
+  const [isAnalyzing, setIsAnalyzing] = useState<Record<number, boolean>>({});
   const [showAiModal, setShowAiModal] = useState(false);
   const [highlightedField, setHighlightedField] = useState<string | null>(null);
+
+  const getAIFeedback = async (index: number, audioUrl: string, taskContext: string) => {
+    setIsAnalyzing(prev => ({ ...prev, [index]: true }));
+    setAiFeedbackStreaming(prev => ({ ...prev, [index]: '' }));
+
+    try {
+      const response = await fetch('/api/analyze-speech', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ audioUrl, taskContext }),
+      });
+
+      if (!response.body) throw new Error('No response body');
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        setAiFeedbackStreaming(prev => ({ ...prev, [index]: (prev[index] || '') + chunk }));
+      }
+    } catch (err) {
+      console.error(err);
+      setAiFeedbackStreaming(prev => ({ ...prev, [index]: 'Ошибка при получении фидбека.' }));
+    } finally {
+      setIsAnalyzing(prev => ({ ...prev, [index]: false }));
+    }
+  };
 
   useEffect(() => {
     if (highlightedField) {
@@ -774,25 +806,43 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
               
               <div className="space-y-3 mb-8">
                   {attempts.map((att, idx) => (
-                      <div 
-                          key={idx} 
-                          className={`p-4 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-4 group ${selectedAttemptIndex === idx ? 'border-indigo-500 bg-indigo-50/50 shadow-sm' : 'border-slate-100 hover:border-slate-300 bg-white'}`}
-                          onClick={() => setSelectedAttemptIndex(idx)}
-                      >
-                          <div className="flex items-center gap-4">
-                              <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-colors ${selectedAttemptIndex === idx ? 'bg-indigo-500 text-white' : 'bg-slate-100 text-slate-400 group-hover:bg-slate-200'}`}>
-                                  {selectedAttemptIndex === idx ? (
-                                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/></svg>
-                                  ) : (
-                                      <span className="text-xs font-bold">{idx + 1}</span>
-                                  )}
+                      <div key={idx} className="flex flex-col gap-2">
+                          <div 
+                              className={`p-4 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-4 group ${selectedAttemptIndex === idx ? 'border-indigo-500 bg-indigo-50/50 shadow-sm' : 'border-slate-100 hover:border-slate-300 bg-white'}`}
+                              onClick={() => setSelectedAttemptIndex(idx)}
+                          >
+                              <div className="flex items-center gap-4">
+                                  <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-colors ${selectedAttemptIndex === idx ? 'bg-indigo-500 text-white' : 'bg-slate-100 text-slate-400 group-hover:bg-slate-200'}`}>
+                                      {selectedAttemptIndex === idx ? (
+                                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/></svg>
+                                      ) : (
+                                          <span className="text-xs font-bold">{idx + 1}</span>
+                                      )}
+                                  </div>
+                                  <div>
+                                      <p className={`text-sm font-bold ${selectedAttemptIndex === idx ? 'text-indigo-900' : 'text-slate-700'}`}>Попытка {idx + 1}</p>
+                                      <p className="text-[10px] text-slate-400 font-medium">{att.timestamp}</p>
+                                  </div>
                               </div>
-                              <div>
-                                  <p className={`text-sm font-bold ${selectedAttemptIndex === idx ? 'text-indigo-900' : 'text-slate-700'}`}>Попытка {idx + 1}</p>
-                                  <p className="text-[10px] text-slate-400 font-medium">{att.timestamp}</p>
-                              </div>
+                              <audio src={att.url} controls className="h-8 w-32 md:w-48 opacity-80 hover:opacity-100 transition-opacity" />
                           </div>
-                          <audio src={att.url} controls className="h-8 w-32 md:w-48 opacity-80 hover:opacity-100 transition-opacity" />
+                          
+                          {/* AI Feedback Display */}
+                          <div className="pl-12">
+                              {aiFeedbackStreaming[idx] ? (
+                                  <div className="p-3 bg-indigo-50 rounded-lg text-xs text-indigo-900 leading-relaxed">
+                                      {aiFeedbackStreaming[idx]}
+                                  </div>
+                              ) : (
+                                  <button
+                                      onClick={() => getAIFeedback(idx, att.url, story.title)}
+                                      disabled={isAnalyzing[idx]}
+                                      className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 underline"
+                                  >
+                                      {isAnalyzing[idx] ? 'Анализ...' : 'Получить ИИ фидбек'}
+                                  </button>
+                              )}
+                          </div>
                       </div>
                   ))}
               </div>
