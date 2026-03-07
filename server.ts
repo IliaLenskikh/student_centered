@@ -22,6 +22,36 @@ async function startServer() {
     }
 
     try {
+      if (!process.env.OPENAI_API_KEY) {
+        // Fallback for development environment without OpenAI key
+        console.warn("OPENAI_API_KEY is missing. Using mock transcription.");
+        
+        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+        
+        let prompt = `Проанализируй ответ студента: "(Аудио не распознано, так как не настроен ключ OpenAI. Представь, что студент ответил 'Я не знаю' или дал очень короткий ответ)". 
+                      Задание было: "${taskContext}".`;
+                      
+        if (questions && Array.isArray(questions) && questions.length > 0) {
+            prompt += `\nВ аудио задавались следующие вопросы:\n${questions.map((q: string, i: number) => `${i+1}. ${q}`).join('\n')}\nОцени, насколько полно и правильно студент ответил на эти вопросы.`;
+        }
+        
+        prompt += `\nДай конструктивные советы по улучшению речи, укажи на ошибки.`;
+        
+        const streamResponse = await ai.models.generateContentStream({
+          model: "gemini-3-flash-preview",
+          contents: prompt,
+        });
+
+        res.setHeader("Content-Type", "text/plain; charset=utf-8");
+        res.setHeader("Transfer-Encoding", "chunked");
+
+        for await (const chunk of streamResponse) {
+          res.write(chunk.text);
+        }
+        res.end();
+        return;
+      }
+
       const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
