@@ -125,9 +125,9 @@ create table if not exists public.teacher_feedback (
 
 alter table public.teacher_feedback enable row level security;
 
-drop policy if exists "Feedback Access Policy" on public.teacher_feedback;
-create policy "Feedback Access Policy"
-  on public.teacher_feedback for all
+drop policy if exists "Feedback Select Policy" on public.teacher_feedback;
+create policy "Feedback Select Policy"
+  on public.teacher_feedback for select
   using (
     auth.uid() = teacher_id
     OR
@@ -137,6 +137,11 @@ create policy "Feedback Access Policy"
       and sr.student_id = auth.uid()
     )
   );
+
+drop policy if exists "Feedback Insert Update Delete Policy" on public.teacher_feedback;
+create policy "Feedback Insert Update Delete Policy"
+  on public.teacher_feedback for all
+  using ( auth.uid() = teacher_id );
 
 -- 5. Storage Bucket for Audio (Speaking Tasks)
 -- Note: You might need to create the bucket 'audio-responses' manually in the dashboard if this script fails on permissions
@@ -207,6 +212,24 @@ create policy "Students can join sessions"
   on public.session_participants
   for insert
   with check ( auth.uid() = student_id );
+
+drop policy if exists "Students can update own session status" on public.session_participants;
+create policy "Students can update own session status"
+  on public.session_participants
+  for update
+  using ( auth.uid() = student_id );
+
+drop policy if exists "Teachers can remove participants" on public.session_participants;
+create policy "Teachers can remove participants"
+  on public.session_participants
+  for delete
+  using (
+    exists (
+      select 1 from public.live_classroom_sessions s
+      where s.id = session_participants.session_id
+      and s.teacher_id = auth.uid()
+    )
+  );
 
 -- 8. ENABLE REALTIME REPLICATION
 -- This is critical for the Live Session and Homework notifications to work

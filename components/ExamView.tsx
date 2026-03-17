@@ -195,10 +195,15 @@ export const ExamView: React.FC = () => {
         }
         
         if (data) {
-          const { data: { publicUrl } } = supabase.storage
+          const { data: signedData, error: signedError } = await supabase.storage
             .from('audio-responses')
-            .getPublicUrl(fileName);
-          speakingUrls[taskId] = publicUrl;
+            .createSignedUrl(fileName, 60 * 60 * 24 * 365 * 10); // 10 years
+          
+          if (signedError) {
+            console.error("Error creating signed URL:", signedError);
+          } else if (signedData) {
+            speakingUrls[taskId] = signedData.signedUrl;
+          }
         }
       }
 

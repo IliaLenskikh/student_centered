@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { supabase } from '../services/supabaseClient';
+import { supabase, isSupabaseConfigured } from '../services/supabaseClient';
 import { UserProfile } from '../types';
 import { getErrorMessage } from '../utils/errorHandling';
 import { isTableNotFoundError } from '../services/errorMapper';
@@ -32,6 +32,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [profileError, setProfileError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!isSupabaseConfigured) {
+      setIsAuthChecking(false);
+      return;
+    }
+
     checkSession();
     
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
@@ -146,6 +151,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setAuthError(null);
     setAuthSuccessMsg(null);
     
+    if (!isSupabaseConfigured) {
+      setAuthError("Supabase credentials are not configured. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.");
+      return;
+    }
+
     try {
       let result;
       if (isLoginMode) {
@@ -174,7 +184,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.error("Auth Error:", error);
       // Check for specific network error message from Supabase client
       if (error.message === 'Failed to fetch') {
-          setAuthError("Unable to connect to the server. Please check your internet connection.");
+          setAuthError("Failed to connect to Supabase. Please ensure your VITE_SUPABASE_URL is correct and your Supabase project is active (not paused).");
       } else {
           setAuthError(getErrorMessage(error));
       }
@@ -185,6 +195,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const handlePasswordReset = async (email: string) => {
     setAuthError(null);
     setAuthSuccessMsg(null);
+
+    if (!isSupabaseConfigured) {
+      setAuthError("Supabase credentials are not configured. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.");
+      return;
+    }
+
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: window.location.origin,
@@ -198,7 +214,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    if (isSupabaseConfigured) {
+      await supabase.auth.signOut();
+    }
     setUserProfile(null);
     setAuthSuccessMsg(null);
     setAuthError(null);

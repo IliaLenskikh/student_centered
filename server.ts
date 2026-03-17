@@ -2,12 +2,23 @@ import express from "express";
 import { createServer as createViteServer } from "vite";
 import { OpenAI, toFile } from "openai";
 import { GoogleGenAI } from "@google/genai";
+import helmet from "helmet";
+import cors from "cors";
 
 async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  app.use(express.json());
+  // Basic security headers
+  app.use(helmet({
+    contentSecurityPolicy: false, // Disabled for Vite development
+    crossOriginEmbedderPolicy: false,
+  }));
+  
+  app.use(cors());
+
+  // Limit JSON payload size to prevent DOS
+  app.use(express.json({ limit: '1mb' }));
 
   // API routes FIRST
   app.get("/api/health", (req, res) => {
@@ -22,13 +33,43 @@ async function startServer() {
     }
 
     try {
+      if (!process.env.OPENAI_API_KEY || !process.env.GEMINI_API_KEY) {
+        return res.status(500).json({ error: "API keys are not configured on the server." });
+      }
+
+      const parsedUrl = new URL(audioUrl);
+      if (parsedUrl.protocol !== 'https:') {
+        return res.status(400).json({ error: "Invalid audioUrl protocol. Must be https." });
+      }
+      
+      // Basic SSRF protection: prevent localhost or local network IPs
+      const hostname = parsedUrl.hostname;
+      if (
+        hostname === 'localhost' ||
+        hostname.startsWith('127.') ||
+        hostname.startsWith('192.168.') ||
+        hostname.startsWith('10.') ||
+        hostname.endsWith('.local')
+      ) {
+         return res.status(400).json({ error: "Invalid audioUrl hostname." });
+      }
+
       const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
       // 1. Download audio from Supabase
       const audioResponse = await fetch(audioUrl);
       if (!audioResponse.ok) throw new Error("Failed to download audio");
+      
+      const contentLength = audioResponse.headers.get('content-length');
+      if (contentLength && parseInt(contentLength, 10) > 15 * 1024 * 1024) { // 15MB limit
+         return res.status(400).json({ error: "Audio file too large. Maximum size is 15MB." });
+      }
+      
       const audioBuffer = await audioResponse.arrayBuffer();
+      if (audioBuffer.byteLength > 15 * 1024 * 1024) {
+         return res.status(400).json({ error: "Audio file too large." });
+      }
 
       // 2. Transcription via Whisper
       const file = await toFile(audioBuffer, "audio.mp3", { type: "audio/mp3" });

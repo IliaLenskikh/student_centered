@@ -1,11 +1,13 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Routes, Route, Navigate, useParams, useLocation, useNavigate } from 'react-router-dom';
 import { 
   Story, 
   ExerciseType, 
   UserProfile, 
-  AttemptDetail
+  AttemptDetail,
+  StudentResult
 } from '../types';
+import { supabase } from '../services/supabaseClient';
 import ExerciseView from './ExerciseView';
 import { StudentDashboard } from './StudentDashboard';
 import { grammarStories } from '../data/grammar';
@@ -69,10 +71,6 @@ interface AppRouterProps {
   totalCompleted: number;
   totalTasks: number;
 }
-
-import { useState, useEffect } from 'react';
-import { supabase } from '../services/supabaseClient';
-import { StudentResult } from '../types';
 
 const ExerciseRouteWrapper: React.FC<AppRouterProps> = (props) => {
   const { type, title } = useParams<{ type: string; title: string }>();

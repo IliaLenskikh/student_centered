@@ -1,6 +1,16 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-const SUPABASE_URL = "https://lzbzrfweffglbqxnzclr.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx6YnpyZndlZmZnbGJxeG56Y2xyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ0MTIzMTEsImV4cCI6MjA3OTk4ODMxMX0.rQgCOev-tANdtHL-uQx-etE7sD32YjFrq9SezSf9c0I";
+let SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "";
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
 
-export const supabase: SupabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+if (SUPABASE_URL && !SUPABASE_URL.startsWith('http')) {
+  SUPABASE_URL = `https://${SUPABASE_URL}`;
+}
+
+export const isSupabaseConfigured = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
+
+if (!isSupabaseConfigured) {
+  console.warn("Supabase credentials are not configured. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.");
+}
+
+export const supabase: SupabaseClient = createClient(SUPABASE_URL || "https://placeholder.supabase.co", SUPABASE_ANON_KEY || "placeholder");

@@ -713,16 +713,20 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
 
               if (error) throw error;
 
-              const { data: urlData } = supabase.storage
+              const { data: signedData, error: signedError } = await supabase.storage
                   .from('audio-responses')
-                  .getPublicUrl(fileName);
+                  .createSignedUrl(fileName, 60 * 60 * 24 * 365 * 10); // 10 years
+              
+              if (signedError) {
+                  console.error("Error creating signed URL:", signedError);
+              }
               
               details.push({
                   question: `${taskLabel} (${item.label})`,
                   userAnswer: "Audio Response Recorded",
                   correctAnswer: "Teacher Review",
                   isCorrect: null, 
-                  audioUrl: urlData.publicUrl,
+                  audioUrl: signedData?.signedUrl || "",
                   context: contextText
               });
           }
@@ -882,6 +886,20 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
                       >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                           Проверить с ИИ (Beta)
+                      </button>
+                  )}
+                  
+                  {story.speakingType === 'interview' && !readOnly && attempts.length > 0 && (
+                      <button 
+                          onClick={() => {
+                              const idx = selectedAttemptIndex !== null ? selectedAttemptIndex : attempts.length - 1;
+                              getAIFeedback(idx, attempts[idx].url, story.title, story.speakingQuestions);
+                          }}
+                          disabled={isAnalyzing[selectedAttemptIndex !== null ? selectedAttemptIndex : attempts.length - 1]}
+                          className="w-full mt-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 px-4 py-3 rounded-xl font-bold text-sm transition-all active:scale-95 flex items-center justify-center gap-2"
+                      >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                          {isAnalyzing[selectedAttemptIndex !== null ? selectedAttemptIndex : attempts.length - 1] ? 'Анализ аудио...' : 'Проверить с ИИ (Beta)'}
                       </button>
                   )}
                   

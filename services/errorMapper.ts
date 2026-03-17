@@ -52,7 +52,7 @@ export const mapSupabaseError = (error: any): AppError => {
     }
     if (error.includes('Failed to fetch')) {
         return {
-            message: "Unable to connect to the server. Please check your internet connection.",
+            message: "Failed to connect to Supabase. Please ensure your VITE_SUPABASE_URL is correct and your Supabase project is active (not paused).",
             code: 'NETWORK_ERROR',
             originalError: error
         };
@@ -78,7 +78,7 @@ export const mapSupabaseError = (error: any): AppError => {
   
   if (message === 'Failed to fetch') {
       return {
-          message: "Unable to connect to the server. Please check your internet connection.",
+          message: "Failed to connect to Supabase. Please ensure your VITE_SUPABASE_URL is correct and your Supabase project is active (not paused).",
           code: 'NETWORK_ERROR',
           originalError: error
       };

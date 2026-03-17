@@ -5,10 +5,10 @@ let aiClient: GoogleGenAI | null = null;
 
 // Initialize the client safely
 try {
-  if (process.env.API_KEY) {
-    aiClient = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  if (process.env.GEMINI_API_KEY) {
+    aiClient = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
   } else {
-    console.warn("API_KEY environment variable is missing. AI features will be disabled.");
+    console.warn("GEMINI_API_KEY environment variable is missing. AI features will be disabled.");
   }
 } catch (error) {
   console.error("Failed to initialize Gemini client:", error);
