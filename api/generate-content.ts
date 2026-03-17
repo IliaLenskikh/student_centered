@@ -13,7 +13,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
+    console.log("Received prompt:", prompt?.slice(0, 50));
     if (!process.env.OPENAI_API_KEY) {
+      console.error("OPENAI_API_KEY is missing");
       return res.status(500).json({ error: "API keys are not configured on the server." });
     }
 
@@ -25,6 +27,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       response_format: responseFormat === "json" ? { type: "json_object" } : { type: "text" },
     });
 
+    console.log("OpenAI response received");
     res.status(200).json({ text: completion.choices[0]?.message?.content || "" });
   } catch (error: any) {
     console.error("Error generating content:", error);

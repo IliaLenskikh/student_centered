@@ -109,7 +109,13 @@ export const SpeakingSection: React.FC<SpeakingSectionProps> = ({ task1, task2, 
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
+        const text = await response.text();
+        let errorData;
+        try {
+          errorData = JSON.parse(text);
+        } catch (e) {
+          errorData = { error: `Server returned ${response.status}: ${text.slice(0, 100)}` };
+        }
         throw new Error(errorData.details || errorData.error || 'Failed to fetch AI feedback');
       }
 
