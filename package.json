@@ -1,6 +1,7 @@
 {
   "name": "oge-english-prep-ai",
   "version": "1.0.0",
+  "type": "module",
   "description": "Interactive OGE English Preparation App with AI Integration",
   "main": "index.tsx",
   "scripts": {
