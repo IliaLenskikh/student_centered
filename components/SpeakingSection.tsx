@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Story } from '../types';
 import { Mic, Square, CheckCircle } from 'lucide-react';
+import { getSpeakingAttempts, uploadSpeakingAudio, saveSpeakingAttempt, updateSpeakingAttemptFeedback } from '../services/speakingService';
 
 interface SpeakingSectionProps {
   task1: Story;
@@ -12,11 +13,71 @@ interface SpeakingSectionProps {
   isSubmitting?: boolean;
   isReadOnly?: boolean;
   speakingUrls?: Record<string, string>;
+  studentId?: string;
+  exerciseTitle?: string;
 }
 
-export const SpeakingSection: React.FC<SpeakingSectionProps> = ({ task1, task2, task3, spread, onAudioRecorded, onSubmit, isSubmitting, isReadOnly, speakingUrls }) => {
+export const SpeakingSection: React.FC<SpeakingSectionProps> = ({ 
+  task1, 
+  task2, 
+  task3, 
+  spread, 
+  onAudioRecorded, 
+  onSubmit, 
+  isSubmitting, 
+  isReadOnly, 
+  speakingUrls,
+  studentId,
+  exerciseTitle
+}) => {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  
+  // Multi-attempt state
+  const [attempts, setAttempts] = useState<Record<string, any[]>>({});
+  const [aiFeedbackData, setAiFeedbackData] = useState<Record<string, Record<number, any>>>({});
+  const [selectedAttemptIndex, setSelectedAttemptIndex] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    if (studentId && exerciseTitle) {
+      loadAllAttempts();
+    }
+  }, [studentId, exerciseTitle]);
+
+  const loadAllAttempts = async () => {
+    if (!studentId || !exerciseTitle) return;
+    
+    const taskIds = ['task1', 'task3'];
+    for (let i = 0; i < 6; i++) taskIds.push(`task2_${i}`);
+
+    const allAttempts: Record<string, any[]> = {};
+    const allFeedback: Record<string, Record<number, any>> = {};
+
+    for (const taskId of taskIds) {
+      const data = await getSpeakingAttempts(studentId, exerciseTitle, taskId);
+      if (data && data.length > 0) {
+        allAttempts[taskId] = data.map(d => ({
+          id: d.id,
+          url: d.audio_url,
+          timestamp: new Date(d.created_at).toLocaleString(),
+          aiFeedback: d.ai_feedback,
+          transcription: d.transcription
+        }));
+        
+        allFeedback[taskId] = {};
+        data.forEach((d, idx) => {
+          if (d.ai_feedback) {
+            allFeedback[taskId][idx] = {
+              feedback: d.ai_feedback,
+              transcription: d.transcription
+            };
+          }
+        });
+      }
+    }
+    setAttempts(allAttempts);
+    setAiFeedbackData(allFeedback);
+  };
 
   useEffect(() => {
     return () => {
@@ -49,8 +110,44 @@ export const SpeakingSection: React.FC<SpeakingSectionProps> = ({ task1, task2, 
 
   const stopRecording = (taskId: string) => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      mediaRecorderRef.current.onstop = () => {
+      mediaRecorderRef.current.onstop = async () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        
+        if (studentId && exerciseTitle) {
+          try {
+            const audioUrl = await uploadSpeakingAudio(audioBlob, studentId);
+            if (!audioUrl) throw new Error("Failed to upload audio");
+
+            const newAttempt = await saveSpeakingAttempt({
+              student_id: studentId,
+              exercise_title: exerciseTitle,
+              task_id: taskId,
+              audio_url: audioUrl
+            });
+
+            if (newAttempt) {
+              const attemptObj = {
+                id: newAttempt.id,
+                url: audioUrl,
+                timestamp: new Date().toLocaleString(),
+                aiFeedback: null,
+                transcription: null
+              };
+              
+              setAttempts(prev => ({
+                ...prev,
+                [taskId]: [...(prev[taskId] || []), attemptObj]
+              }));
+              setSelectedAttemptIndex(prev => ({
+                ...prev,
+                [taskId]: (attempts[taskId]?.length || 0)
+              }));
+            }
+          } catch (err) {
+            console.error("Error saving speaking attempt:", err);
+          }
+        }
+
         onAudioRecorded(taskId, audioBlob);
         
         // Stop all tracks to release microphone
@@ -78,9 +175,8 @@ export const SpeakingSection: React.FC<SpeakingSectionProps> = ({ task1, task2, 
   const [aiFeedback, setAiFeedback] = useState<Record<string, string>>({});
   const [isAnalyzing, setIsAnalyzing] = useState<Record<string, boolean>>({});
 
-  const getAIFeedback = async (taskId: string, audioUrl: string, taskContext: string) => {
+  const getAIFeedback = async (taskId: string, audioUrl: string, taskContext: string, attemptIdx: number) => {
     setIsAnalyzing(prev => ({ ...prev, [taskId]: true }));
-    setAiFeedback(prev => ({ ...prev, [taskId]: '' }));
 
     try {
       let audioBase64 = null;
@@ -109,35 +205,36 @@ export const SpeakingSection: React.FC<SpeakingSectionProps> = ({ task1, task2, 
       });
 
       if (!response.ok) {
-        const text = await response.text();
-        let errorData;
-        try {
-          errorData = JSON.parse(text);
-        } catch (e) {
-          errorData = { error: `Server returned ${response.status}: ${text.slice(0, 100)}` };
-        }
-        throw new Error(errorData.details || errorData.error || 'Failed to fetch AI feedback');
+        throw new Error('Failed to fetch AI feedback');
       }
 
       const data = await response.json();
       
-      // Format the structured JSON into a readable string for this simple view
-      let feedbackString = `Транскрипция: ${data.transcription}\n\n`;
-      if (data.mistakes && data.mistakes.length > 0) {
-        feedbackString += `Ошибки:\n`;
-        data.mistakes.forEach((m: any) => {
-          feedbackString += `- [${m.type}] ${m.text}: ${m.explanation} -> ${m.correction}\n`;
-        });
-        feedbackString += '\n';
-      }
-      if (data.generalFeedback) {
-        feedbackString += `Комментарий: ${data.generalFeedback}`;
+      // Persist to DB
+      const attemptId = attempts[taskId]?.[attemptIdx]?.id;
+      if (attemptId) {
+        await updateSpeakingAttemptFeedback(attemptId, data.feedback, data.transcription);
       }
 
-      setAiFeedback(prev => ({ ...prev, [taskId]: feedbackString }));
+      setAiFeedbackData(prev => ({
+        ...prev,
+        [taskId]: {
+          ...(prev[taskId] || {}),
+          [attemptIdx]: {
+            feedback: data.feedback,
+            transcription: data.transcription
+          }
+        }
+      }));
     } catch (err: any) {
       console.error(err);
-      setAiFeedback(prev => ({ ...prev, [taskId]: `Ошибка при получении фидбека: ${err?.message || 'Неизвестная ошибка'}` }));
+      setAiFeedbackData(prev => ({
+        ...prev,
+        [taskId]: {
+          ...(prev[taskId] || {}),
+          [attemptIdx]: { error: err?.message || 'Неизвестная ошибка' }
+        }
+      }));
     } finally {
       setIsAnalyzing(prev => ({ ...prev, [taskId]: false }));
     }
@@ -345,9 +442,63 @@ export const SpeakingSection: React.FC<SpeakingSectionProps> = ({ task1, task2, 
                     )}
 
                     {t1State === 'done' && (
-                      <div className="mt-6 flex justify-center text-green-600 font-bold flex items-center gap-2">
-                        <CheckCircle className="w-5 h-5" />
-                        Ответ записан
+                      <div className="mt-6 space-y-4">
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-sm font-bold text-slate-700">Ваши попытки:</h4>
+                          <button 
+                            onClick={() => {
+                              setT1State('initial');
+                              setT1Time(90);
+                            }}
+                            className="text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
+                          >
+                            <Mic className="w-3 h-3" />
+                            Новая попытка
+                          </button>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          {attempts['task1']?.map((att, idx) => (
+                            <div key={idx} className="flex flex-col gap-2 p-3 border border-slate-100 rounded-xl bg-slate-50/50">
+                              <div className="flex items-center justify-between gap-4">
+                                <div className="flex items-center gap-2">
+                                  <span className="w-6 h-6 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center text-[10px] font-bold">
+                                    {idx + 1}
+                                  </span>
+                                  <span className="text-[11px] font-bold text-slate-700">Попытка {idx + 1}</span>
+                                </div>
+                                <audio src={att.url} controls className="h-6 w-32 opacity-80" />
+                              </div>
+                              
+                              {/* AI Feedback Section */}
+                              <div className="mt-1">
+                                {aiFeedbackData['task1']?.[idx] ? (
+                                  <div className="p-3 bg-white rounded-lg text-[11px] text-slate-700 border border-indigo-100 shadow-sm">
+                                    <p className="font-bold text-indigo-600 mb-1">Транскрипция:</p>
+                                    <p className="mb-2 italic">"{aiFeedbackData['task1'][idx].transcription}"</p>
+                                    <p className="font-bold text-indigo-600 mb-1">Фидбек:</p>
+                                    <p className="whitespace-pre-wrap">{aiFeedbackData['task1'][idx].feedback}</p>
+                                  </div>
+                                ) : (
+                                  <button
+                                    onClick={() => getAIFeedback('task1', att.url, task1.text || '', idx)}
+                                    disabled={isAnalyzing['task1']}
+                                    className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 underline flex items-center gap-1"
+                                  >
+                                    {isAnalyzing['task1'] ? (
+                                      <span className="animate-pulse">Анализ...</span>
+                                    ) : (
+                                      <>
+                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                                        Получить ИИ фидбек
+                                      </>
+                                    )}
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -404,23 +555,31 @@ export const SpeakingSection: React.FC<SpeakingSectionProps> = ({ task1, task2, 
                           </div>
                           
                           {/* AI Feedback Display */}
-                          {t2Answers[idx] && speakingUrls?.[`task2_${idx}`] && (
-                            <div className="mt-2">
-                              {aiFeedback[`task2_${idx}`] ? (
-                                <div className="p-3 bg-indigo-50 rounded-lg text-xs text-indigo-900 leading-relaxed">
-                                  {aiFeedback[`task2_${idx}`]}
+                          <div className="mt-2 space-y-2">
+                            {attempts[`task2_${idx}`]?.map((att, aIdx) => (
+                              <div key={aIdx} className="p-3 bg-slate-50 rounded-lg border border-slate-100">
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className="text-[10px] font-bold text-slate-500">Попытка {aIdx + 1}</span>
+                                  <audio src={att.url} controls className="h-5 w-24 opacity-70" />
                                 </div>
-                              ) : (
-                                <button
-                                  onClick={() => getAIFeedback(`task2_${idx}`, speakingUrls[`task2_${idx}`], q)}
-                                  disabled={isAnalyzing[`task2_${idx}`]}
-                                  className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 underline"
-                                >
-                                  {isAnalyzing[`task2_${idx}`] ? 'Анализ...' : 'Получить ИИ фидбек'}
-                                </button>
-                              )}
-                            </div>
-                          )}
+                                
+                                {aiFeedbackData[`task2_${idx}`]?.[aIdx] ? (
+                                  <div className="text-[10px] text-indigo-900 leading-relaxed bg-white p-2 rounded border border-indigo-50">
+                                    <p className="font-bold mb-1">ИИ Фидбек:</p>
+                                    <p className="whitespace-pre-wrap">{aiFeedbackData[`task2_${idx}`][aIdx].feedback}</p>
+                                  </div>
+                                ) : (
+                                  <button
+                                    onClick={() => getAIFeedback(`task2_${idx}`, att.url, q, aIdx)}
+                                    disabled={isAnalyzing[`task2_${idx}`]}
+                                    className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 underline"
+                                  >
+                                    {isAnalyzing[`task2_${idx}`] ? 'Анализ...' : 'Получить ИИ фидбек'}
+                                  </button>
+                                )}
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -510,9 +669,63 @@ export const SpeakingSection: React.FC<SpeakingSectionProps> = ({ task1, task2, 
                     )}
 
                     {t3State === 'done' && (
-                      <div className="mt-8 flex justify-center text-green-600 font-bold flex items-center gap-2">
-                        <CheckCircle className="w-5 h-5" />
-                        Ответ записан
+                      <div className="mt-8 space-y-4">
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-sm font-bold text-slate-700">Ваши попытки:</h4>
+                          <button 
+                            onClick={() => {
+                              setT3State('initial');
+                              setT3Time(90);
+                            }}
+                            className="text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
+                          >
+                            <Mic className="w-3 h-3" />
+                            Новая попытка
+                          </button>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          {attempts['task3']?.map((att, idx) => (
+                            <div key={idx} className="flex flex-col gap-2 p-3 border border-slate-100 rounded-xl bg-slate-50/50">
+                              <div className="flex items-center justify-between gap-4">
+                                <div className="flex items-center gap-2">
+                                  <span className="w-6 h-6 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center text-[10px] font-bold">
+                                    {idx + 1}
+                                  </span>
+                                  <span className="text-[11px] font-bold text-slate-700">Попытка {idx + 1}</span>
+                                </div>
+                                <audio src={att.url} controls className="h-6 w-32 opacity-80" />
+                              </div>
+                              
+                              {/* AI Feedback Section */}
+                              <div className="mt-1">
+                                {aiFeedbackData['task3']?.[idx] ? (
+                                  <div className="p-3 bg-white rounded-lg text-[11px] text-slate-700 border border-indigo-100 shadow-sm">
+                                    <p className="font-bold text-indigo-600 mb-1">Транскрипция:</p>
+                                    <p className="mb-2 italic">"{aiFeedbackData['task3'][idx].transcription}"</p>
+                                    <p className="font-bold text-indigo-600 mb-1">Фидбек:</p>
+                                    <p className="whitespace-pre-wrap">{aiFeedbackData['task3'][idx].feedback}</p>
+                                  </div>
+                                ) : (
+                                  <button
+                                    onClick={() => getAIFeedback('task3', att.url, task3.text || '', idx)}
+                                    disabled={isAnalyzing['task3']}
+                                    className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 underline flex items-center gap-1"
+                                  >
+                                    {isAnalyzing['task3'] ? (
+                                      <span className="animate-pulse">Анализ...</span>
+                                    ) : (
+                                      <>
+                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                                        Получить ИИ фидбек
+                                      </>
+                                    )}
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     )}
                   </div>

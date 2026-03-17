@@ -1,9 +1,10 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Story, ExerciseType, UserProgress, ValidationState, UserProfile, AttemptDetail, StudentResult } from '../types';
+import { Story, ExerciseType, UserProgress, ValidationState, UserProfile, AttemptDetail, StudentResult, SpeakingAttempt } from '../types';
 import { getExplanation, getWritingSuggestions, getSpeakingSuggestion, evaluateSpeaking, evaluateReadAloud, evaluateWriting } from '../services/geminiService';
 import { supabase } from '../services/supabaseClient';
 import { saveInputs, loadInputs, saveAudioAttempt, loadAudioAttempts, clearAudioAttempts, clearInputs } from '../services/storageService';
+import { uploadSpeakingAudio, saveSpeakingAttempt, updateSpeakingAttemptFeedback, getSpeakingAttempts } from '../services/speakingService';
 import { ResultReview } from './ResultReview';
 
 interface ExerciseViewProps {
@@ -117,8 +118,40 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
   const [timer, setTimer] = useState(0);
   const timerRef = useRef<number | null>(null);
 
-  const [attempts, setAttempts] = useState<{ blob: Blob; url: string; timestamp: string }[]>([]);
+  const [attempts, setAttempts] = useState<{ blob?: Blob; url: string; timestamp: string; id?: string; aiFeedback?: any; transcription?: string }[]>([]);
   const [selectedAttemptIndex, setSelectedAttemptIndex] = useState<number | null>(null);
+
+  // Fetch past attempts from Supabase
+  useEffect(() => {
+    if ((type === ExerciseType.SPEAKING || type === ExerciseType.ORAL_SPEECH) && userProfile?.id) {
+        getSpeakingAttempts(userProfile.id, story.title).then(dbAttempts => {
+            if (dbAttempts && dbAttempts.length > 0) {
+                const mappedAttempts = dbAttempts.map(att => ({
+                    url: att.audio_url,
+                    timestamp: new Date(att.created_at).toLocaleString(),
+                    id: att.id,
+                    aiFeedback: att.ai_feedback,
+                    transcription: att.transcription
+                }));
+                setAttempts(mappedAttempts);
+                setSpeakingPhase('REVIEW');
+                setSelectedAttemptIndex(0);
+                
+                // Also populate aiFeedbackData
+                const newAiFeedbackData: Record<number, any> = {};
+                mappedAttempts.forEach((att, idx) => {
+                    if (att.aiFeedback) {
+                        newAiFeedbackData[idx] = {
+                            feedback: att.aiFeedback,
+                            transcription: att.transcription
+                        };
+                    }
+                });
+                setAiFeedbackData(newAiFeedbackData);
+            }
+        });
+    }
+  }, [story.title, userProfile?.id, type]);
 
   // Populate state from viewingResult for Review Mode
   useEffect(() => {
@@ -269,6 +302,20 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
   const [generatedAnswers, setGeneratedAnswers] = useState<Record<number, string>>({});
   const [isGeneratingAnswer, setIsGeneratingAnswer] = useState<Record<number, boolean>>({});
 
+  const updateResultWithFeedback = async (resultId: string, updatedDetails: AttemptDetail[]) => {
+    try {
+      const { error } = await supabase
+        .from('student_results')
+        .update({ details: updatedDetails })
+        .eq('id', resultId);
+      
+      if (error) throw error;
+      console.log('Feedback saved to database');
+    } catch (err) {
+      console.error('Failed to save feedback to database:', err);
+    }
+  };
+
   const getAIFeedback = async (index: number, audioUrl: string, taskContext: string, questions?: string[]) => {
     setIsAnalyzing(prev => ({ ...prev, [index]: true }));
     setAiFeedbackData(prev => {
@@ -317,6 +364,24 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
 
       const data = await response.json();
       setAiFeedbackData(prev => ({ ...prev, [index]: data }));
+
+      // Persist to speaking_attempts table
+      const attemptId = attempts[index]?.id;
+      if (attemptId) {
+          await updateSpeakingAttemptFeedback(attemptId, data.feedback, data.transcription);
+      }
+
+      // Persist to database if we are in review mode
+      if (viewingResult) {
+          const updatedDetails = [...viewingResult.details];
+          if (updatedDetails[index]) {
+              updatedDetails[index] = {
+                  ...updatedDetails[index],
+                  aiFeedback: data
+              };
+              updateResultWithFeedback(viewingResult.id, updatedDetails);
+          }
+      }
     } catch (err: any) {
       console.error(err);
       setAiFeedbackData(prev => ({ ...prev, [index]: { error: `Ошибка при получении фидбека: ${err?.message || 'Неизвестная ошибка'}` } }));
@@ -652,7 +717,7 @@ Answer the questions in the task (in each task there's what should be said) usin
               }
           };
 
-          mediaRecorder.onstop = () => {
+          mediaRecorder.onstop = async () => {
               const blob = new Blob(audioChunksRef.current, { type: mimeType });
               if (blob.size < 100) {
                   setRecordingError("Recording too short or empty. Please try again.");
@@ -660,13 +725,32 @@ Answer the questions in the task (in each task there's what should be said) usin
                   return;
               }
               const url = URL.createObjectURL(blob);
-              const timestamp = new Date().toLocaleTimeString();
+              const timestamp = new Date().toLocaleString();
               
+              setSpeakingPhase('UPLOADING');
+              
+              let dbId = undefined;
+              let finalUrl = url;
+
+              if (userProfile?.id) {
+                  const uploadedUrl = await uploadSpeakingAudio(blob, userProfile.id);
+                  if (uploadedUrl) {
+                      finalUrl = uploadedUrl;
+                      const saved = await saveSpeakingAttempt({
+                          student_id: userProfile.id,
+                          exercise_title: story.title,
+                          task_id: story.speakingType || 'speaking',
+                          audio_url: uploadedUrl
+                      });
+                      if (saved) dbId = saved.id;
+                  }
+              }
+
               // Save to IndexedDB
               saveAudioAttempt(story.title, blob, timestamp);
 
               setAttempts(prev => {
-                  const newAttempts = [...prev, { blob, url, timestamp }];
+                  const newAttempts = [...prev, { blob, url: finalUrl, timestamp, id: dbId }];
                   if (newAttempts.length === 1) setSelectedAttemptIndex(0);
                   return newAttempts;
               });
@@ -787,12 +871,14 @@ Answer the questions in the task (in each task there's what should be said) usin
       setSpeakingPhase('UPLOADING');
       
       const blobsToUpload: { blob: Blob; label: string; originalIndex: number }[] = [];
-      if (selectedAttemptIndex !== null) {
-          blobsToUpload.push({ blob: attempts[selectedAttemptIndex].blob, label: 'Selected Attempt', originalIndex: selectedAttemptIndex });
+      if (selectedAttemptIndex !== null && attempts[selectedAttemptIndex].blob) {
+          blobsToUpload.push({ blob: attempts[selectedAttemptIndex].blob as Blob, label: 'Selected Attempt', originalIndex: selectedAttemptIndex });
       } else {
           // If none selected, upload all attempts
           attempts.forEach((att, idx) => {
-              blobsToUpload.push({ blob: att.blob, label: `Attempt ${idx + 1}`, originalIndex: idx });
+              if (att.blob) {
+                  blobsToUpload.push({ blob: att.blob, label: `Attempt ${idx + 1}`, originalIndex: idx });
+              }
           });
       }
 
@@ -1055,27 +1141,15 @@ Answer the questions in the task (in each task there's what should be said) usin
                   <div className="flex flex-col gap-3">
                       {!effectiveReadOnly && (
                           <div className="flex gap-3">
-                              {canRerecord ? (
-                                  <button 
-                                      onClick={() => {
-                                          setSpeakingPhase('IDLE');
-                                          setTimer(0);
-                                      }}
-                                      className="flex-1 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-4 py-3 rounded-xl font-bold text-sm transition-all active:scale-95"
-                                  >
-                                      Перезаписать
-                                  </button>
-                              ) : (
-                                  <div className="flex-1 bg-slate-50 text-slate-400 px-4 py-3 rounded-xl font-bold text-sm text-center border border-dashed border-slate-200 cursor-not-allowed">
-                                      Попытки исчерпаны
-                                  </div>
-                              )}
                               <button 
-                                  onClick={handleAudioUpload}
-                                  className="flex-[2] bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-3 rounded-xl font-bold text-sm shadow-md hover:shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2"
+                                  onClick={() => {
+                                      setSpeakingPhase('IDLE');
+                                      setTimer(0);
+                                  }}
+                                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-3 rounded-xl font-bold text-sm transition-all active:scale-95 shadow-md flex items-center justify-center gap-2"
                               >
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                                  Отправить учителю
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                                  Новая попытка
                               </button>
                           </div>
                       )}
@@ -1093,14 +1167,6 @@ Answer the questions in the task (in each task there's what should be said) usin
                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                               Попробовать снова
                           </button>
-                      )}
-                      
-                      {!effectiveReadOnly && (
-                          <div className="mt-2 text-center">
-                              <p className="text-[10px] text-slate-400">
-                                  {canRerecord ? "Доступна 1 перезапись." : "Лимит перезаписей исчерпан."}
-                              </p>
-                          </div>
                       )}
                   </div>
               </div>
@@ -1452,6 +1518,16 @@ Answer the questions in the task (in each task there's what should be said) usin
       const taskContext = story.text || story.emailBody || story.title;
       const result = await evaluateWriting(emailContent, taskContext);
       setAiFeedback(result);
+
+      // Persist to database if we are in review mode
+      if (viewingResult && viewingResult.details && viewingResult.details.length > 0) {
+          const updatedDetails = [...viewingResult.details];
+          updatedDetails[0] = {
+              ...updatedDetails[0],
+              aiFeedback: result
+          };
+          updateResultWithFeedback(viewingResult.id, updatedDetails);
+      }
     } catch (error) {
       setAiFeedback({ feedback: "Error evaluating writing." });
     } finally {
@@ -1547,7 +1623,38 @@ Answer the questions in the task (in each task there's what should be said) usin
       
       return (
           <div className="flex flex-col lg:flex-row gap-6 h-full min-h-[600px] lg:h-[calc(100vh-200px)]">
-             <div className="lg:w-1/3 order-2 lg:order-1 flex flex-col gap-4">
+             {/* Left Column: Editor/Answer */}
+             <div className="lg:w-2/3 order-1 lg:order-1 flex flex-col bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-200">
+                <div className="bg-slate-50 border-b border-slate-200 px-6 py-4 flex items-center justify-between">
+                   <h2 className="text-lg font-bold text-slate-800">{story.emailSubject || "New Email"}</h2>
+                   <span className="text-xs text-slate-400">Draft - Auto-saving</span>
+                </div>
+                <div className="flex-1 p-0 relative">
+                   <textarea
+                       value={emailContent}
+                       onChange={(e) => handleEmailChange(e.target.value)}
+                       placeholder="Start writing your email here..."
+                       readOnly={effectiveReadOnly}
+                       className="w-full h-full p-8 text-slate-700 text-lg leading-relaxed focus:outline-none resize-none custom-scrollbar"
+                   />
+                </div>
+                
+                {/* AI Suggestion Section */}
+                {showAiModal && (
+                    <div className="bg-indigo-50 border-t border-indigo-100 p-4">
+                        <div className="flex justify-between items-center mb-2">
+                            <span className="text-[10px] font-bold text-indigo-500 uppercase">AI Suggestion</span>
+                            <button onClick={() => setShowAiModal(false)} className="text-indigo-400 hover:text-indigo-600">
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                            </button>
+                        </div>
+                        <p className="text-xs text-indigo-700 italic">{aiSuggestion}</p>
+                    </div>
+                )}
+             </div>
+
+             {/* Right Column: Task & Stats */}
+             <div className="lg:w-1/3 order-2 lg:order-2 flex flex-col gap-4">
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex-1 flex flex-col">
                    <h3 className="font-bold text-slate-800 mb-4 text-sm uppercase tracking-wide">Task</h3>
                    <div className="prose prose-sm text-slate-600 mb-6 flex-1 overflow-y-auto custom-scrollbar">

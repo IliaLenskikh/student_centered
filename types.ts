@@ -119,6 +119,17 @@ export interface StudentResult {
   student_email?: string; // For dashboard display
 }
 
+export interface SpeakingAttempt {
+  id: string;
+  created_at: string;
+  student_id: string;
+  exercise_title: string;
+  task_id: string;
+  audio_url: string;
+  ai_feedback?: any;
+  transcription?: string;
+}
+
 export interface ToastMsg {
   id: number;
   message: string;

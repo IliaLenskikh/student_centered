@@ -1,4 +1,5 @@
 import { ExerciseType } from '../types';
+import { handleApiResponse } from '../utils/api';
 
 // We now use the server-side OpenAI endpoint instead of Gemini directly
 const generateContent = async (prompt: string, responseFormat: 'text' | 'json' = 'text'): Promise<string> => {
@@ -11,11 +12,7 @@ const generateContent = async (prompt: string, responseFormat: 'text' | 'json' =
       body: JSON.stringify({ prompt, responseFormat }),
     });
 
-    if (!response.ok) {
-      throw new Error(`API error: ${response.statusText}`);
-    }
-
-    const data = await response.json();
+    const data = await handleApiResponse(response);
     return data.text || "";
   } catch (error) {
     console.error("Error calling AI endpoint:", error);

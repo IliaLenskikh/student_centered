@@ -33,6 +33,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (parsedUrl.protocol !== 'https:') {
         return res.status(400).json({ error: "Invalid audioUrl protocol. Must be https." });
       }
+
+      // Basic SSRF protection: prevent localhost or local network IPs
+      const hostname = parsedUrl.hostname;
+      if (
+        hostname === 'localhost' ||
+        hostname.startsWith('127.') ||
+        hostname.startsWith('192.168.') ||
+        hostname.startsWith('10.') ||
+        hostname.endsWith('.local')
+      ) {
+         return res.status(400).json({ error: "Invalid audioUrl hostname." });
+      }
       
       // Download audio
       const audioResponse = await fetch(audioUrl);

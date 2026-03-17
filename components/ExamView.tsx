@@ -717,6 +717,8 @@ export const ExamView: React.FC = () => {
           isSubmitting={isSubmitting}
           isReadOnly={isReadOnly}
           speakingUrls={speakingUrls}
+          studentId={userProfile?.id}
+          exerciseTitle={`Exam_${id || 'Current'}`}
         />
       );
     }

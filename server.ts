@@ -1,21 +1,19 @@
-import express from "express";
+console.log("Starting server.ts...");
+
+import express, { Request, Response, NextFunction } from "express";
 import { createServer as createViteServer } from "vite";
 import { OpenAI, toFile } from "openai";
-import { GoogleGenAI } from "@google/genai";
-import helmet from "helmet";
-import cors from "cors";
+import path from "path";
 
 async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  // Basic security headers
-  app.use(helmet({
-    contentSecurityPolicy: false, // Disabled for Vite development
-    crossOriginEmbedderPolicy: false,
-  }));
-  
-  app.use(cors());
+  // Request logging for API
+  app.use("/api", (req, res, next) => {
+    console.log(`[API] ${req.method} ${req.path}`);
+    next();
+  });
 
   // Limit JSON payload size to prevent DOS
   app.use(express.json({ limit: '50mb' }));
@@ -121,7 +119,11 @@ ${questions && Array.isArray(questions) && questions.length > 0 ? `В аудио
       });
     } catch (error: any) {
       console.error("Error processing speech:", error);
-      res.status(500).json({ error: "Failed to process audio", details: error?.message || String(error) });
+      res.status(500).json({ 
+        error: "Failed to process audio", 
+        details: error?.message || String(error),
+        stack: process.env.NODE_ENV === 'development' ? error?.stack : undefined
+      });
     }
   });
 
@@ -148,8 +150,17 @@ ${questions && Array.isArray(questions) && questions.length > 0 ? `В аудио
       res.json({ text: completion.choices[0]?.message?.content || "" });
     } catch (error: any) {
       console.error("Error generating content:", error);
-      res.status(500).json({ error: "Failed to generate content", details: error?.message || String(error) });
+      res.status(500).json({ 
+        error: "Failed to generate content", 
+        details: error?.message || String(error),
+        stack: process.env.NODE_ENV === 'development' ? error?.stack : undefined
+      });
     }
+  });
+
+  // 404 handler for API routes
+  app.all("/api/*", (req, res) => {
+    res.status(404).json({ error: `API route not found: ${req.method} ${req.path}` });
   });
 
   // Vite middleware for development
@@ -159,14 +170,42 @@ ${questions && Array.isArray(questions) && questions.length > 0 ? `В аудио
       appType: "spa",
     });
     app.use(vite.middlewares);
+    console.log("Vite middleware initialized");
   } else {
     // In production, serve static files from dist
-    app.use(express.static("dist"));
+    const distPath = path.resolve(process.cwd(), "dist");
+    app.use(express.static(distPath));
+    
+    // SPA fallback for production
+    app.get("*", (req, res) => {
+      res.sendFile("index.html", { root: distPath });
+    });
   }
 
+  // Global error handler
+  app.use((err: any, req: Request, res: Response, next: NextFunction) => {
+    console.error("Unhandled error:", err);
+    
+    if (err instanceof SyntaxError && 'status' in err && err.status === 400 && 'body' in err) {
+      return res.status(400).json({ error: "Invalid JSON payload" });
+    }
+    
+    res.status(500).json({ 
+      error: "Internal server error", 
+      details: err?.message || String(err),
+      stack: process.env.NODE_ENV === 'development' ? err?.stack : undefined
+    });
+  });
+
+  console.log("Attempting to listen on port", PORT);
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });
 }
 
-startServer();
+startServer().catch(err => {
+  console.error("CRITICAL: Failed to start server:", err);
+  process.exit(1);
+});
+
+console.log("server.ts execution finished");
