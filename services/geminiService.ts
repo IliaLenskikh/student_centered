@@ -1,18 +1,27 @@
-import { GoogleGenAI } from "@google/genai";
 import { ExerciseType } from '../types';
 
-let aiClient: GoogleGenAI | null = null;
+// We now use the server-side OpenAI endpoint instead of Gemini directly
+const generateContent = async (prompt: string, responseFormat: 'text' | 'json' = 'text'): Promise<string> => {
+  try {
+    const response = await fetch('/api/generate-content', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ prompt, responseFormat }),
+    });
 
-// Initialize the client safely
-try {
-  if (process.env.GEMINI_API_KEY) {
-    aiClient = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-  } else {
-    console.warn("GEMINI_API_KEY environment variable is missing. AI features will be disabled.");
+    if (!response.ok) {
+      throw new Error(`API error: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return data.text || "";
+  } catch (error) {
+    console.error("Error calling AI endpoint:", error);
+    throw error;
   }
-} catch (error) {
-  console.error("Failed to initialize Gemini client:", error);
-}
+};
 
 export const getExplanation = async (
   contextSentence: string,
@@ -21,10 +30,6 @@ export const getExplanation = async (
   correctAnswer: string,
   taskType: ExerciseType
 ): Promise<string> => {
-  if (!aiClient) {
-    return "API Key not configured. Please check your environment variables.";
-  }
-
   let prompt = "";
 
   if (taskType === ExerciseType.READING) {
@@ -75,13 +80,10 @@ export const getExplanation = async (
   }
 
   try {
-    const response = await aiClient.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-    });
-    return response.text || "Could not generate explanation.";
+    const text = await generateContent(prompt);
+    return text || "Could not generate explanation.";
   } catch (error) {
-    console.error("Gemini API Error:", error);
+    console.error("AI API Error:", error);
     return "Sorry, I couldn't connect to the AI tutor right now.";
   }
 };
@@ -91,8 +93,6 @@ export const getWritingSuggestions = async (
   type: 'greeting' | 'body' | 'closing' | 'rewrite' | 'level',
   level: string = 'B2'
 ): Promise<string> => {
-  if (!aiClient) return "AI unavailable.";
-
   let prompt = "";
   switch (type) {
     case 'greeting':
@@ -113,20 +113,15 @@ export const getWritingSuggestions = async (
   }
 
   try {
-    const response = await aiClient.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-    });
-    return response.text || "No suggestion generated.";
+    const text = await generateContent(prompt);
+    return text || "No suggestion generated.";
   } catch (error) {
-    console.error("Gemini API Error:", error);
+    console.error("AI API Error:", error);
     return "Error generating suggestion.";
   }
 };
 
 export const getSpeakingSuggestion = async (taskContext: string): Promise<string> => {
-  if (!aiClient) return "AI unavailable.";
-
   const prompt = `
     You are an English tutor. Provide a sample answer (3-4 sentences) for the following speaking task.
     Task: "${taskContext}"
@@ -135,19 +130,14 @@ export const getSpeakingSuggestion = async (taskContext: string): Promise<string
   `;
 
   try {
-    const response = await aiClient.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-    });
-    return response.text || "No suggestion generated.";
+    const text = await generateContent(prompt);
+    return text || "No suggestion generated.";
   } catch (error) {
     return "Error generating suggestion.";
   }
 };
 
 export const evaluateSpeaking = async (transcript: string, taskContext: string): Promise<{score: number, feedback: string, mistakes: string[]}> => {
-  if (!aiClient) return { score: 0, feedback: "AI unavailable", mistakes: [] };
-
   const prompt = `
     Evaluate this spoken response for an English learner (B2 level).
     Task: "${taskContext}"
@@ -160,13 +150,8 @@ export const evaluateSpeaking = async (transcript: string, taskContext: string):
   `;
 
   try {
-    const response = await aiClient.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-      config: { responseMimeType: 'application/json' }
-    });
-    const text = response.text || "{}";
-    return JSON.parse(text);
+    const text = await generateContent(prompt, 'json');
+    return JSON.parse(text || "{}");
   } catch (error) {
     return { score: 0, feedback: "Error evaluating.", mistakes: [] };
   }
@@ -178,8 +163,6 @@ export const evaluateReadAloud = async (text: string): Promise<{pronunciationSco
   // Since we don't have a backend audio processor here, we'll return a mock response
   // or use the text to give general advice on difficult words.
   
-  if (!aiClient) return { pronunciationScore: 0, fluencyScore: 0, feedback: "AI unavailable" };
-
   const prompt = `
     The student is reading this text aloud: "${text}".
     Identify 3-5 words in this text that are typically difficult to pronounce for learners.
@@ -189,12 +172,8 @@ export const evaluateReadAloud = async (text: string): Promise<{pronunciationSco
   `;
 
   try {
-    const response = await aiClient.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-      config: { responseMimeType: 'application/json' }
-    });
-    const res = JSON.parse(response.text || "{}");
+    const textResponse = await generateContent(prompt, 'json');
+    const res = JSON.parse(textResponse || "{}");
     return {
         pronunciationScore: res.pronunciationScore || 8,
         fluencyScore: res.fluencyScore || 8,
@@ -206,8 +185,6 @@ export const evaluateReadAloud = async (text: string): Promise<{pronunciationSco
 };
 
 export const generateProgressReport = async (results: any[]): Promise<{ strengths: string[], weaknesses: string[], recommendations: string }> => {
-  if (!aiClient) return { strengths: [], weaknesses: ["AI unavailable"], recommendations: "Please check API key." };
-
   // Prepare data for AI
   const dataSummary = results.map(r => ({
       type: r.exercise_type,
@@ -234,13 +211,8 @@ export const generateProgressReport = async (results: any[]): Promise<{ strength
   `;
 
   try {
-    const response = await aiClient.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-      config: { responseMimeType: 'application/json' }
-    });
-    const text = response.text || "{}";
-    return JSON.parse(text);
+    const text = await generateContent(prompt, 'json');
+    return JSON.parse(text || "{}");
   } catch (error) {
     console.error("Error generating progress report:", error);
     return { strengths: [], weaknesses: ["Error analyzing data"], recommendations: "Please try again later." };

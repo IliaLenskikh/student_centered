@@ -247,39 +247,130 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
   const [aiSuggestion, setAiSuggestion] = useState<string | null>(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [aiFeedback, setAiFeedback] = useState<{score?: number, feedback?: string, mistakes?: string[]} | null>(null);
-  const [aiFeedbackStreaming, setAiFeedbackStreaming] = useState<Record<number, string>>({});
+  const [aiFeedbackData, setAiFeedbackData] = useState<Record<number, any>>({});
   const [isAnalyzing, setIsAnalyzing] = useState<Record<number, boolean>>({});
   const [showAiModal, setShowAiModal] = useState(false);
   const [highlightedField, setHighlightedField] = useState<string | null>(null);
+  const [generatedAnswers, setGeneratedAnswers] = useState<Record<number, string>>({});
+  const [isGeneratingAnswer, setIsGeneratingAnswer] = useState<Record<number, boolean>>({});
 
   const getAIFeedback = async (index: number, audioUrl: string, taskContext: string, questions?: string[]) => {
     setIsAnalyzing(prev => ({ ...prev, [index]: true }));
-    setAiFeedbackStreaming(prev => ({ ...prev, [index]: '' }));
+    setAiFeedbackData(prev => {
+      const newData = { ...prev };
+      delete newData[index];
+      return newData;
+    });
 
     try {
+      let audioBase64 = null;
+      if (audioUrl.startsWith('blob:')) {
+        const response = await fetch(audioUrl);
+        const blob = await response.blob();
+        audioBase64 = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const base64String = reader.result as string;
+            resolve(base64String.split(',')[1]); // Remove data URL prefix
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+      }
+
       const response = await fetch('/api/analyze-speech', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ audioUrl, taskContext, questions }),
+        body: JSON.stringify({ 
+          audioUrl: audioUrl.startsWith('blob:') ? undefined : audioUrl, 
+          audioBase64, 
+          taskContext, 
+          questions 
+        }),
       });
 
-      if (!response.body) throw new Error('No response body');
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        const chunk = decoder.decode(value, { stream: true });
-        setAiFeedbackStreaming(prev => ({ ...prev, [index]: (prev[index] || '') + chunk }));
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.details || errorData.error || 'Failed to fetch AI feedback');
       }
-    } catch (err) {
+
+      const data = await response.json();
+      setAiFeedbackData(prev => ({ ...prev, [index]: data }));
+    } catch (err: any) {
       console.error(err);
-      setAiFeedbackStreaming(prev => ({ ...prev, [index]: 'Ошибка при получении фидбека.' }));
+      setAiFeedbackData(prev => ({ ...prev, [index]: { error: `Ошибка при получении фидбека: ${err?.message || 'Неизвестная ошибка'}` } }));
     } finally {
       setIsAnalyzing(prev => ({ ...prev, [index]: false }));
     }
+  };
+
+  const generateCorrectedAnswer = async (index: number, transcription: string, taskContext: string) => {
+    setIsGeneratingAnswer(prev => ({ ...prev, [index]: true }));
+    try {
+      const prompt = `Task: "${taskContext}"
+Student's answer: "${transcription}"
+
+Answer the questions in the task (in each task there's what should be said) using 10-12 sentences. Each answer starts with "I am going to talk about ...." or something similar and ends with "that's all I wanted to say". The vocabulary must be B1 level, no fancy grammar structures, all ideas must be connected. Base your answer on the student's original ideas if possible, but ensure all task requirements are met.`;
+      
+      const response = await fetch('/api/generate-content', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt, responseFormat: 'text' }),
+      });
+
+      if (!response.ok) throw new Error('Failed to generate answer');
+      const data = await response.json();
+      setGeneratedAnswers(prev => ({ ...prev, [index]: data.text }));
+    } catch (error) {
+      console.error(error);
+      setGeneratedAnswers(prev => ({ ...prev, [index]: "Не удалось сгенерировать ответ." }));
+    } finally {
+      setIsGeneratingAnswer(prev => ({ ...prev, [index]: false }));
+    }
+  };
+
+  const renderHighlightedText = (text: string, mistakes: any[]) => {
+    if (!mistakes || mistakes.length === 0) return <span>{text}</span>;
+
+    // A simple approach: we'll just render the text and append the mistakes below it, 
+    // or we can try to replace the exact strings in the text with highlighted spans.
+    // For a robust highlighting, we split the text by the mistake strings.
+    // Since mistakes might overlap or be substrings, a safer approach is to highlight them using a regex or simple string replacement.
+    
+    let highlightedElements: React.ReactNode[] = [text];
+
+    mistakes.forEach((mistake, mIdx) => {
+      const newElements: React.ReactNode[] = [];
+      highlightedElements.forEach((el, eIdx) => {
+        if (typeof el === 'string') {
+          const parts = el.split(mistake.text);
+          parts.forEach((part, pIdx) => {
+            newElements.push(part);
+            if (pIdx < parts.length - 1) {
+              let colorClass = "border-red-400 bg-red-50 text-red-900";
+              if (mistake.type === 'vocabulary') colorClass = "border-orange-400 bg-orange-50 text-orange-900";
+              if (mistake.type === 'pronunciation') colorClass = "border-purple-400 bg-purple-50 text-purple-900";
+              
+              newElements.push(
+                <span key={`${mIdx}-${eIdx}-${pIdx}`} className={`relative group inline-block border ${colorClass} cursor-help mx-1 px-1 rounded`}>
+                  {mistake.text}
+                  <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block w-48 p-2 bg-slate-800 text-white text-xs rounded shadow-lg z-10">
+                    <strong className="block mb-1 capitalize">{mistake.type}</strong>
+                    <span className="block mb-1">{mistake.explanation}</span>
+                    <span className="block text-emerald-300 font-medium">→ {mistake.correction}</span>
+                  </span>
+                </span>
+              );
+            }
+          });
+        } else {
+          newElements.push(el);
+        }
+      });
+      highlightedElements = newElements;
+    });
+
+    return <div className="leading-relaxed">{highlightedElements}</div>;
   };
 
   useEffect(() => {
@@ -798,115 +889,158 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
 
   const renderSpeakingReview = () => {
       const canRerecord = attempts.length < 2;
+      const currentIdx = selectedAttemptIndex !== null ? selectedAttemptIndex : (attempts.length > 0 ? attempts.length - 1 : -1);
+      const hasFeedback = currentIdx >= 0 && aiFeedbackData[currentIdx] && !aiFeedbackData[currentIdx].error;
       
       return (
-          <div className="bg-white p-8 rounded-3xl shadow-xl border border-slate-100 mb-8 w-full max-w-2xl mx-auto">
-              <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-lg font-bold text-slate-800">Ваши записи</h3>
-                  <div className="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-xs font-bold uppercase tracking-wider">
-                      {attempts.length} {attempts.length === 1 ? 'Попытка' : 'Попытки'}
-                  </div>
-              </div>
-              
-              <div className="space-y-3 mb-8">
-                  {attempts.map((att, idx) => (
-                      <div key={idx} className="flex flex-col gap-2">
-                          <div 
-                              className={`p-4 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-4 group ${selectedAttemptIndex === idx ? 'border-indigo-500 bg-indigo-50/50 shadow-sm' : 'border-slate-100 hover:border-slate-300 bg-white'}`}
-                              onClick={() => setSelectedAttemptIndex(idx)}
-                          >
-                              <div className="flex items-center gap-4">
-                                  <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-colors ${selectedAttemptIndex === idx ? 'bg-indigo-500 text-white' : 'bg-slate-100 text-slate-400 group-hover:bg-slate-200'}`}>
-                                      {selectedAttemptIndex === idx ? (
-                                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/></svg>
-                                      ) : (
-                                          <span className="text-xs font-bold">{idx + 1}</span>
-                                      )}
-                                  </div>
-                                  <div>
-                                      <p className={`text-sm font-bold ${selectedAttemptIndex === idx ? 'text-indigo-900' : 'text-slate-700'}`}>Попытка {idx + 1}</p>
-                                      <p className="text-[10px] text-slate-400 font-medium">{att.timestamp}</p>
-                                  </div>
-                              </div>
-                              <audio src={att.url} controls className="h-8 w-32 md:w-48 opacity-80 hover:opacity-100 transition-opacity" />
+          <div className={`flex flex-col gap-6 w-full ${hasFeedback ? 'md:flex-row' : 'max-w-2xl mx-auto'}`}>
+              {/* Left Side: Feedback (if available) */}
+              {hasFeedback && (
+                  <div className="flex-1 bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col gap-4 order-2 md:order-1">
+                      <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                          <svg className="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                          Анализ ответа
+                      </h3>
+                      
+                      <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                          <div className="flex justify-between items-center mb-2">
+                              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Транскрипция</span>
+                              <span className="text-xs font-medium text-slate-400 bg-white px-2 py-1 rounded-md border border-slate-200">
+                                  {aiFeedbackData[currentIdx].feedback?.sentenceCount || 0} предложений
+                              </span>
                           </div>
-                          
-                          {/* AI Feedback Display */}
-                          <div className="pl-12">
-                              {aiFeedbackStreaming[idx] ? (
-                                  <div className="p-3 bg-indigo-50 rounded-lg text-xs text-indigo-900 leading-relaxed">
-                                      {aiFeedbackStreaming[idx]}
-                                  </div>
-                              ) : (
-                                  <button
-                                      onClick={() => getAIFeedback(idx, att.url, story.title, story.speakingQuestions)}
-                                      disabled={isAnalyzing[idx]}
-                                      className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-lg text-xs font-bold transition-colors"
-                                  >
-                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                                      {isAnalyzing[idx] ? 'Анализ...' : 'Проверить с помощью ИИ'}
-                                  </button>
-                              )}
+                          <div className="text-sm text-slate-700">
+                              {renderHighlightedText(aiFeedbackData[currentIdx].transcription, aiFeedbackData[currentIdx].feedback?.mistakes)}
                           </div>
                       </div>
-                  ))}
-              </div>
 
-              <div className="flex flex-col gap-3">
-                  {!readOnly && (
-                      <div className="flex gap-3">
-                          {canRerecord ? (
+                      {aiFeedbackData[currentIdx].feedback?.generalFeedback && (
+                          <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100">
+                              <span className="text-xs font-bold text-indigo-500 uppercase tracking-wider mb-1 block">Общий комментарий</span>
+                              <p className="text-sm text-indigo-900">{aiFeedbackData[currentIdx].feedback.generalFeedback}</p>
+                          </div>
+                      )}
+
+                      <div className="mt-auto pt-4 border-t border-slate-100">
+                          {!generatedAnswers[currentIdx] ? (
                               <button 
-                                  onClick={() => {
-                                      setSpeakingPhase('IDLE');
-                                      setTimer(0);
-                                  }}
-                                  className="flex-1 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-4 py-3 rounded-xl font-bold text-sm transition-all active:scale-95"
+                                  onClick={() => generateCorrectedAnswer(currentIdx, aiFeedbackData[currentIdx].transcription, story.title)}
+                                  disabled={isGeneratingAnswer[currentIdx]}
+                                  className="w-full bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 px-4 py-3 rounded-xl font-bold text-sm transition-all active:scale-95 flex items-center justify-center gap-2"
                               >
-                                  Перезаписать
+                                  {isGeneratingAnswer[currentIdx] ? (
+                                      <span className="animate-pulse">Генерация...</span>
+                                  ) : (
+                                      <>
+                                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                                          Сгенерировать идеальный ответ
+                                      </>
+                                  )}
                               </button>
                           ) : (
-                              <div className="flex-1 bg-slate-50 text-slate-400 px-4 py-3 rounded-xl font-bold text-sm text-center border border-dashed border-slate-200 cursor-not-allowed">
-                                  Попытки исчерпаны
+                              <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100">
+                                  <span className="text-xs font-bold text-emerald-600 uppercase tracking-wider mb-2 block flex items-center gap-1">
+                                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                                      Идеальный ответ
+                                  </span>
+                                  <p className="text-sm text-emerald-900 whitespace-pre-wrap">{generatedAnswers[currentIdx]}</p>
                               </div>
                           )}
-                          <button 
-                              onClick={handleAudioUpload}
-                              className="flex-[2] bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-3 rounded-xl font-bold text-sm shadow-md hover:shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2"
-                          >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                              Отправить учителю
-                          </button>
                       </div>
-                  )}
-                  {story.speakingType === 'read-aloud' && !readOnly && (
-                      <button 
-                          onClick={handleEvaluateSpeaking}
-                          className="w-full bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 px-4 py-3 rounded-xl font-bold text-sm transition-all active:scale-95 flex items-center justify-center gap-2"
-                      >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                          Проверить с ИИ (Beta)
-                      </button>
-                  )}
+                  </div>
+              )}
+
+              {/* Right Side: Normal Interface */}
+              <div className={`bg-white p-8 rounded-3xl shadow-xl border border-slate-100 mb-8 ${hasFeedback ? 'flex-1 order-1 md:order-2' : 'w-full'}`}>
+                  <div className="flex items-center justify-between mb-6">
+                      <h3 className="text-lg font-bold text-slate-800">Ваши записи</h3>
+                      <div className="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-xs font-bold uppercase tracking-wider">
+                          {attempts.length} {attempts.length === 1 ? 'Попытка' : 'Попытки'}
+                      </div>
+                  </div>
                   
-                  {story.speakingType === 'interview' && !readOnly && attempts.length > 0 && (
-                      <button 
-                          onClick={() => {
-                              const idx = selectedAttemptIndex !== null ? selectedAttemptIndex : attempts.length - 1;
-                              getAIFeedback(idx, attempts[idx].url, story.title, story.speakingQuestions);
-                          }}
-                          disabled={isAnalyzing[selectedAttemptIndex !== null ? selectedAttemptIndex : attempts.length - 1]}
-                          className="w-full mt-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 px-4 py-3 rounded-xl font-bold text-sm transition-all active:scale-95 flex items-center justify-center gap-2"
-                      >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                          {isAnalyzing[selectedAttemptIndex !== null ? selectedAttemptIndex : attempts.length - 1] ? 'Анализ аудио...' : 'Проверить с ИИ (Beta)'}
-                      </button>
-                  )}
-                  
-                  <div className="mt-2 text-center">
-                      <p className="text-[10px] text-slate-400">
-                          {canRerecord ? "Доступна 1 перезапись." : "Лимит перезаписей исчерпан."}
-                      </p>
+                  <div className="space-y-3 mb-8">
+                      {attempts.map((att, idx) => (
+                          <div key={idx} className="flex flex-col gap-2">
+                              <div 
+                                  className={`p-4 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-4 group ${selectedAttemptIndex === idx ? 'border-indigo-500 bg-indigo-50/50 shadow-sm' : 'border-slate-100 hover:border-slate-300 bg-white'}`}
+                                  onClick={() => setSelectedAttemptIndex(idx)}
+                              >
+                                  <div className="flex items-center gap-4">
+                                      <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-colors ${selectedAttemptIndex === idx ? 'bg-indigo-500 text-white' : 'bg-slate-100 text-slate-400 group-hover:bg-slate-200'}`}>
+                                          {selectedAttemptIndex === idx ? (
+                                              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/></svg>
+                                          ) : (
+                                              <span className="text-xs font-bold">{idx + 1}</span>
+                                          )}
+                                      </div>
+                                      <div>
+                                          <p className={`text-sm font-bold ${selectedAttemptIndex === idx ? 'text-indigo-900' : 'text-slate-700'}`}>Попытка {idx + 1}</p>
+                                          <p className="text-[10px] text-slate-400 font-medium">{att.timestamp}</p>
+                                      </div>
+                                  </div>
+                                  <audio src={att.url} controls className="h-8 w-32 md:w-48 opacity-80 hover:opacity-100 transition-opacity" />
+                              </div>
+                              
+                              {/* AI Feedback Error Display */}
+                              {aiFeedbackData[idx]?.error && (
+                                  <div className="pl-12">
+                                      <div className="p-3 bg-red-50 rounded-lg text-xs text-red-900 leading-relaxed">
+                                          {aiFeedbackData[idx].error}
+                                      </div>
+                                  </div>
+                              )}
+                          </div>
+                      ))}
+                  </div>
+
+                  <div className="flex flex-col gap-3">
+                      {!readOnly && (
+                          <div className="flex gap-3">
+                              {canRerecord ? (
+                                  <button 
+                                      onClick={() => {
+                                          setSpeakingPhase('IDLE');
+                                          setTimer(0);
+                                      }}
+                                      className="flex-1 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-4 py-3 rounded-xl font-bold text-sm transition-all active:scale-95"
+                                  >
+                                      Перезаписать
+                                  </button>
+                              ) : (
+                                  <div className="flex-1 bg-slate-50 text-slate-400 px-4 py-3 rounded-xl font-bold text-sm text-center border border-dashed border-slate-200 cursor-not-allowed">
+                                      Попытки исчерпаны
+                                  </div>
+                              )}
+                              <button 
+                                  onClick={handleAudioUpload}
+                                  className="flex-[2] bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-3 rounded-xl font-bold text-sm shadow-md hover:shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2"
+                              >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                                  Отправить учителю
+                              </button>
+                          </div>
+                      )}
+                      
+                      {!readOnly && attempts.length > 0 && (
+                          <button 
+                              onClick={() => {
+                                  const idx = selectedAttemptIndex !== null ? selectedAttemptIndex : attempts.length - 1;
+                                  getAIFeedback(idx, attempts[idx].url, story.title, story.speakingQuestions);
+                              }}
+                              disabled={isAnalyzing[currentIdx]}
+                              className="w-full mt-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 px-4 py-3 rounded-xl font-bold text-sm transition-all active:scale-95 flex items-center justify-center gap-2"
+                          >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                              {isAnalyzing[currentIdx] ? 'Анализ аудио...' : 'Проверить с ИИ (Beta)'}
+                          </button>
+                      )}
+                      
+                      <div className="mt-2 text-center">
+                          <p className="text-[10px] text-slate-400">
+                              {canRerecord ? "Доступна 1 перезапись." : "Лимит перезаписей исчерпан."}
+                          </p>
+                      </div>
                   </div>
               </div>
           </div>

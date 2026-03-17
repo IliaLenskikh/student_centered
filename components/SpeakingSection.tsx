@@ -83,26 +83,55 @@ export const SpeakingSection: React.FC<SpeakingSectionProps> = ({ task1, task2, 
     setAiFeedback(prev => ({ ...prev, [taskId]: '' }));
 
     try {
+      let audioBase64 = null;
+      if (audioUrl.startsWith('blob:')) {
+        const response = await fetch(audioUrl);
+        const blob = await response.blob();
+        audioBase64 = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const base64String = reader.result as string;
+            resolve(base64String.split(',')[1]); // Remove data URL prefix
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+      }
+
       const response = await fetch('/api/analyze-speech', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ audioUrl, taskContext }),
+        body: JSON.stringify({ 
+          audioUrl: audioUrl.startsWith('blob:') ? undefined : audioUrl, 
+          audioBase64, 
+          taskContext 
+        }),
       });
 
-      if (!response.body) throw new Error('No response body');
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        const chunk = decoder.decode(value, { stream: true });
-        setAiFeedback(prev => ({ ...prev, [taskId]: prev[taskId] + chunk }));
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.details || errorData.error || 'Failed to fetch AI feedback');
       }
-    } catch (err) {
+
+      const data = await response.json();
+      
+      // Format the structured JSON into a readable string for this simple view
+      let feedbackString = `Транскрипция: ${data.transcription}\n\n`;
+      if (data.mistakes && data.mistakes.length > 0) {
+        feedbackString += `Ошибки:\n`;
+        data.mistakes.forEach((m: any) => {
+          feedbackString += `- [${m.type}] ${m.text}: ${m.explanation} -> ${m.correction}\n`;
+        });
+        feedbackString += '\n';
+      }
+      if (data.generalFeedback) {
+        feedbackString += `Комментарий: ${data.generalFeedback}`;
+      }
+
+      setAiFeedback(prev => ({ ...prev, [taskId]: feedbackString }));
+    } catch (err: any) {
       console.error(err);
-      setAiFeedback(prev => ({ ...prev, [taskId]: 'Ошибка при получении фидбека.' }));
+      setAiFeedback(prev => ({ ...prev, [taskId]: `Ошибка при получении фидбека: ${err?.message || 'Неизвестная ошибка'}` }));
     } finally {
       setIsAnalyzing(prev => ({ ...prev, [taskId]: false }));
     }
