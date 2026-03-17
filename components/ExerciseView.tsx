@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Story, ExerciseType, UserProgress, ValidationState, UserProfile, AttemptDetail, StudentResult } from '../types';
-import { getExplanation, getWritingSuggestions, getSpeakingSuggestion, evaluateSpeaking, evaluateReadAloud } from '../services/geminiService';
+import { getExplanation, getWritingSuggestions, getSpeakingSuggestion, evaluateSpeaking, evaluateReadAloud, evaluateWriting } from '../services/geminiService';
 import { supabase } from '../services/supabaseClient';
 import { saveInputs, loadInputs, saveAudioAttempt, loadAudioAttempts, clearAudioAttempts, clearInputs } from '../services/storageService';
 import { ResultReview } from './ResultReview';
@@ -172,6 +172,7 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
 
           if (type === ExerciseType.SPEAKING || type === ExerciseType.ORAL_SPEECH) {
               // For speaking, details contain audioUrl
+              const newAiFeedbackData: Record<number, any> = {};
               details.forEach((d) => {
                   if (d.audioUrl) {
                       newAttempts.push({
@@ -179,11 +180,25 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
                           url: d.audioUrl,
                           timestamp: new Date(viewingResult.created_at).toLocaleTimeString()
                       });
+                      if (d.aiFeedback) {
+                          newAiFeedbackData[newAttempts.length - 1] = d.aiFeedback;
+                      }
                   }
               });
               setAttempts(newAttempts);
+              setAiFeedbackData(newAiFeedbackData);
               setSpeakingPhase('REVIEW');
+              if (newAttempts.length > 0) setSelectedAttemptIndex(0);
           } else {
+              if (type === ExerciseType.WRITING) {
+                  const writingDetail = details.find(d => d.question === 'Email Writing Task');
+                  if (writingDetail) {
+                      setEmailContent(writingDetail.userAnswer);
+                      if (writingDetail.aiFeedback) {
+                          setAiFeedback(writingDetail.aiFeedback);
+                      }
+                  }
+              }
               if (story.subStories) {
                   story.subStories.forEach((sub, idx) => processStory(sub, `section_${idx}_`));
                   const checked: any = {};
@@ -307,10 +322,23 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
   const generateCorrectedAnswer = async (index: number, transcription: string, taskContext: string) => {
     setIsGeneratingAnswer(prev => ({ ...prev, [index]: true }));
     try {
-      const prompt = `Task: "${taskContext}"
+      let prompt = "";
+      if (index === -1) {
+        // Writing
+        prompt = `Task: "${taskContext}"
+Student's answer: "${transcription}"
+
+Write an ideal email response for this task. Use 10-12 sentences.
+The vocabulary must be B1 level, no fancy grammar structures, all ideas must be connected.
+Base your answer on the student's original ideas if possible, but ensure all task requirements are met.
+Format it as a natural email (Greeting, Body, Closing).`;
+      } else {
+        // Speaking
+        prompt = `Task: "${taskContext}"
 Student's answer: "${transcription}"
 
 Answer the questions in the task (in each task there's what should be said) using 10-12 sentences. Each answer starts with "I am going to talk about ...." or something similar and ends with "that's all I wanted to say". The vocabulary must be B1 level, no fancy grammar structures, all ideas must be connected. Base your answer on the student's original ideas if possible, but ensure all task requirements are met.`;
+      }
       
       const response = await fetch('/api/generate-content', {
         method: 'POST',
@@ -752,13 +780,13 @@ Answer the questions in the task (in each task there's what should be said) usin
   const handleAudioUpload = async () => {
       setSpeakingPhase('UPLOADING');
       
-      const blobsToUpload: { blob: Blob; label: string }[] = [];
+      const blobsToUpload: { blob: Blob; label: string; originalIndex: number }[] = [];
       if (selectedAttemptIndex !== null) {
-          blobsToUpload.push({ blob: attempts[selectedAttemptIndex].blob, label: 'Selected Attempt' });
+          blobsToUpload.push({ blob: attempts[selectedAttemptIndex].blob, label: 'Selected Attempt', originalIndex: selectedAttemptIndex });
       } else {
           // If none selected, upload all attempts
           attempts.forEach((att, idx) => {
-              blobsToUpload.push({ blob: att.blob, label: `Attempt ${idx + 1}` });
+              blobsToUpload.push({ blob: att.blob, label: `Attempt ${idx + 1}`, originalIndex: idx });
           });
       }
 
@@ -818,7 +846,8 @@ Answer the questions in the task (in each task there's what should be said) usin
                   correctAnswer: "Teacher Review",
                   isCorrect: null, 
                   audioUrl: signedData?.signedUrl || "",
-                  context: contextText
+                  context: contextText,
+                  aiFeedback: aiFeedbackData[item.originalIndex]
               });
           }
 
@@ -891,11 +920,12 @@ Answer the questions in the task (in each task there's what should be said) usin
       const canRerecord = attempts.length < 2;
       const currentIdx = selectedAttemptIndex !== null ? selectedAttemptIndex : (attempts.length > 0 ? attempts.length - 1 : -1);
       const hasFeedback = currentIdx >= 0 && aiFeedbackData[currentIdx] && !aiFeedbackData[currentIdx].error;
+      const effectiveReadOnly = readOnly || isReviewMode;
       
       return (
-          <div className={`flex flex-col gap-6 w-full ${hasFeedback ? 'md:flex-row' : 'max-w-2xl mx-auto'}`}>
+          <div className="flex flex-col gap-6 w-full md:flex-row">
               {/* Left Side: Feedback (if available) */}
-              {hasFeedback && (
+              {hasFeedback ? (
                   <div className="flex-1 bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col gap-4 order-2 md:order-1">
                       <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
                           <svg className="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
@@ -948,10 +978,32 @@ Answer the questions in the task (in each task there's what should be said) usin
                           )}
                       </div>
                   </div>
+              ) : (
+                  <div className="flex-1 bg-slate-50 p-6 rounded-3xl border border-dashed border-slate-200 flex flex-col items-center justify-center text-center gap-4 order-2 md:order-1 min-h-[300px]">
+                      <div className="w-16 h-16 bg-indigo-100 text-indigo-500 rounded-full flex items-center justify-center mb-2">
+                          <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" /></svg>
+                      </div>
+                      <h3 className="text-lg font-bold text-slate-700">Фидбек не сгенерирован</h3>
+                      <p className="text-sm text-slate-500 max-w-xs">Вы можете получить подробный анализ вашего ответа, нажав на кнопку ниже.</p>
+                      
+                      {attempts.length > 0 && (
+                          <button 
+                              onClick={() => {
+                                  const idx = selectedAttemptIndex !== null ? selectedAttemptIndex : attempts.length - 1;
+                                  getAIFeedback(idx, attempts[idx].url, story.title, story.speakingQuestions);
+                              }}
+                              disabled={isAnalyzing[currentIdx]}
+                              className="mt-4 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-xl font-bold text-sm shadow-md hover:shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2"
+                          >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                              {isAnalyzing[currentIdx] ? 'Анализ аудио...' : 'Проверить с ИИ (Beta)'}
+                          </button>
+                      )}
+                  </div>
               )}
 
               {/* Right Side: Normal Interface */}
-              <div className={`bg-white p-8 rounded-3xl shadow-xl border border-slate-100 mb-8 ${hasFeedback ? 'flex-1 order-1 md:order-2' : 'w-full'}`}>
+              <div className="bg-white p-8 rounded-3xl shadow-xl border border-slate-100 mb-8 flex-1 order-1 md:order-2">
                   <div className="flex items-center justify-between mb-6">
                       <h3 className="text-lg font-bold text-slate-800">Ваши записи</h3>
                       <div className="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-xs font-bold uppercase tracking-wider">
@@ -995,7 +1047,7 @@ Answer the questions in the task (in each task there's what should be said) usin
                   </div>
 
                   <div className="flex flex-col gap-3">
-                      {!readOnly && (
+                      {!effectiveReadOnly && (
                           <div className="flex gap-3">
                               {canRerecord ? (
                                   <button 
@@ -1022,25 +1074,28 @@ Answer the questions in the task (in each task there's what should be said) usin
                           </div>
                       )}
                       
-                      {!readOnly && attempts.length > 0 && (
+                      {isReviewMode && !readOnly && (
                           <button 
                               onClick={() => {
-                                  const idx = selectedAttemptIndex !== null ? selectedAttemptIndex : attempts.length - 1;
-                                  getAIFeedback(idx, attempts[idx].url, story.title, story.speakingQuestions);
+                                  setViewingResult(null);
+                                  setAttempts([]);
+                                  setSpeakingPhase('IDLE');
+                                  setTimer(0);
                               }}
-                              disabled={isAnalyzing[currentIdx]}
-                              className="w-full mt-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 px-4 py-3 rounded-xl font-bold text-sm transition-all active:scale-95 flex items-center justify-center gap-2"
+                              className="w-full mt-3 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 px-4 py-3 rounded-xl font-bold text-sm transition-all active:scale-95 flex items-center justify-center gap-2"
                           >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                              {isAnalyzing[currentIdx] ? 'Анализ аудио...' : 'Проверить с ИИ (Beta)'}
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                              Попробовать снова
                           </button>
                       )}
                       
-                      <div className="mt-2 text-center">
-                          <p className="text-[10px] text-slate-400">
-                              {canRerecord ? "Доступна 1 перезапись." : "Лимит перезаписей исчерпан."}
-                          </p>
-                      </div>
+                      {!effectiveReadOnly && (
+                          <div className="mt-2 text-center">
+                              <p className="text-[10px] text-slate-400">
+                                  {canRerecord ? "Доступна 1 перезапись." : "Лимит перезаписей исчерпан."}
+                              </p>
+                          </div>
+                      )}
                   </div>
               </div>
           </div>
@@ -1079,6 +1134,7 @@ Answer the questions in the task (in each task there's what should be said) usin
             isCorrect: null,
             context: story.text || story.emailBody,
             wordCount: wordCount,
+            aiFeedback: aiFeedback
         }];
 
         if (typeof window !== 'undefined') {
@@ -1382,6 +1438,21 @@ Answer the questions in the task (in each task there's what should be said) usin
     }
   };
 
+  const handleEvaluateWriting = async () => {
+    if (!emailContent) return;
+    setIsAiLoading(true);
+    setAiFeedback(null);
+    try {
+      const taskContext = story.text || story.emailBody || story.title;
+      const result = await evaluateWriting(emailContent, taskContext);
+      setAiFeedback(result);
+    } catch (error) {
+      setAiFeedback({ feedback: "Error evaluating writing." });
+    } finally {
+      setIsAiLoading(false);
+    }
+  };
+
   const renderAiModal = () => {
     if (!showAiModal) return null;
     
@@ -1462,6 +1533,7 @@ Answer the questions in the task (in each task there's what should be said) usin
   };
 
   const renderWritingLayout = () => {
+      const effectiveReadOnly = readOnly || isReviewMode;
       // Fallback if text/body missing
       const taskText = story.text || story.emailBody || "Write your response below.";
       
@@ -1488,7 +1560,67 @@ Answer the questions in the task (in each task there's what should be said) usin
                           </div>
                        </div>
                        
-                       {!readOnly && (
+                       {isReviewMode && !aiFeedback && (
+                           <button 
+                            onClick={handleEvaluateWriting}
+                            disabled={isAiLoading}
+                            className="w-full mt-6 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold py-3 px-4 rounded-xl border border-indigo-200 transition-all active:scale-95 disabled:opacity-70 flex items-center justify-center gap-2"
+                           >
+                               {isAiLoading ? "Анализ..." : "Проверить с ИИ (Beta)"}
+                           </button>
+                       )}
+
+                       {isReviewMode && aiFeedback && (
+                           <div className="mt-6 p-4 bg-emerald-50 rounded-xl border border-emerald-100">
+                               <h4 className="font-bold text-emerald-800 text-xs uppercase mb-2">AI Feedback</h4>
+                               <div className="flex items-center gap-2 mb-2">
+                                   <div className="flex-1 h-2 bg-emerald-100 rounded-full overflow-hidden">
+                                       <div className="bg-emerald-500 h-full rounded-full" style={{ width: `${(aiFeedback.score || 0) * 10}%` }}></div>
+                                   </div>
+                                   <span className="font-bold text-emerald-600 text-sm">{aiFeedback.score}/10</span>
+                               </div>
+                               <p className="text-xs text-emerald-700 leading-relaxed mb-3">{aiFeedback.feedback}</p>
+                               {aiFeedback.mistakes && aiFeedback.mistakes.length > 0 && (
+                                   <ul className="text-[10px] text-emerald-600 list-disc list-inside space-y-1">
+                                       {aiFeedback.mistakes.map((m, i) => <li key={i}>{m}</li>)}
+                                   </ul>
+                               )}
+                               
+                               <div className="mt-4 pt-4 border-t border-emerald-100">
+                                   {!generatedAnswers[-1] ? (
+                                       <button 
+                                           onClick={() => generateCorrectedAnswer(-1, emailContent, taskText)}
+                                           disabled={isGeneratingAnswer[-1]}
+                                           className="w-full bg-white hover:bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-2 rounded-lg font-bold text-xs transition-all active:scale-95 flex items-center justify-center gap-2"
+                                       >
+                                           {isGeneratingAnswer[-1] ? "Генерация..." : "Показать идеальный ответ"}
+                                       </button>
+                                   ) : (
+                                       <div className="bg-white p-3 rounded-lg border border-emerald-100">
+                                           <span className="text-[10px] font-bold text-emerald-500 uppercase block mb-1">Идеальный ответ</span>
+                                           <p className="text-sm text-emerald-900 whitespace-pre-wrap leading-relaxed">{generatedAnswers[-1]}</p>
+                                       </div>
+                                   )}
+                               </div>
+                           </div>
+                       )}
+
+                       {isReviewMode && !readOnly && (
+                           <button 
+                               onClick={() => {
+                                   setViewingResult(null);
+                                   setEmailContent('');
+                                   setAiFeedback(null);
+                                   setShowResults(false);
+                               }}
+                               className="w-full mt-3 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 px-4 py-3 rounded-xl font-bold text-sm transition-all active:scale-95 flex items-center justify-center gap-2"
+                           >
+                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                               Попробовать снова
+                           </button>
+                       )}
+
+                       {!effectiveReadOnly && (
                            <button 
                             onClick={handleSubmitWriting} 
                             disabled={isSubmittingWriting}

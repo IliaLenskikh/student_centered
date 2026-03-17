@@ -103,6 +103,7 @@ export interface AttemptDetail {
   context?: string; // For context sentences
   audioUrl?: string; // URL to the recorded audio
   wordCount?: number; // Word count for writing tasks
+  aiFeedback?: any; // AI generated feedback
 }
 
 export interface StudentResult {

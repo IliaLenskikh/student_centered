@@ -218,3 +218,23 @@ export const generateProgressReport = async (results: any[]): Promise<{ strength
     return { strengths: [], weaknesses: ["Error analyzing data"], recommendations: "Please try again later." };
   }
 };
+
+export const evaluateWriting = async (text: string, taskContext: string): Promise<{score: number, feedback: string, mistakes: string[]}> => {
+  const prompt = `
+    Evaluate this written response for an English learner (B2 level).
+    Task: "${taskContext}"
+    Student Response: "${text}"
+    
+    Return JSON with:
+    - score (0-10)
+    - feedback (short encouraging feedback)
+    - mistakes (array of strings, listing specific grammar/vocab errors)
+  `;
+
+  try {
+    const textResponse = await generateContent(prompt, 'json');
+    return JSON.parse(textResponse || "{}");
+  } catch (error) {
+    return { score: 0, feedback: "Error evaluating.", mistakes: [] };
+  }
+};
