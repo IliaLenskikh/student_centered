@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import hark from 'hark';
 import { Story, ExerciseType, UserProgress, ValidationState, UserProfile, AttemptDetail, StudentResult, SpeakingAttempt } from '../types';
 import { getExplanation, getWritingSuggestions, getSpeakingSuggestion, evaluateSpeaking, evaluateReadAloud, evaluateWriting } from '../services/geminiService';
 import { supabase } from '../services/supabaseClient';
@@ -110,6 +111,9 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
   // If viewingResult is present, we are in review mode
   const isReviewMode = !!viewingResult;
   const effectiveReadOnly = readOnly || isReviewMode;
+
+  const harkRef = useRef<hark.Harker | null>(null);
+  const [isSpeaking, setIsSpeaking] = useState(false);
 
   // Fetch past attempts from Supabase
   useEffect(() => {
@@ -628,6 +632,10 @@ Answer the questions in the task (in each task there's what should be said) usin
   }, [type, story, listeningAudioUrl]);
 
   const stopMediaTracks = () => {
+      if (harkRef.current) {
+          harkRef.current.stop();
+          harkRef.current = null;
+      }
       if (streamRef.current) {
           streamRef.current.getTracks().forEach(track => track.stop());
           streamRef.current = null;
@@ -650,6 +658,19 @@ Answer the questions in the task (in each task there's what should be said) usin
           }
       }
   }, [listeningAudioUrl]);
+
+  useEffect(() => {
+      if (!mediaRecorderRef.current) return;
+      if (isPaused) return; // Manual pause overrides auto-pause
+
+      const shouldRecord = isSpeaking && !isAudioPlaying;
+
+      if (shouldRecord && mediaRecorderRef.current.state === 'paused') {
+          mediaRecorderRef.current.resume();
+      } else if (!shouldRecord && mediaRecorderRef.current.state === 'recording') {
+          mediaRecorderRef.current.pause();
+      }
+  }, [isSpeaking, isAudioPlaying, isPaused]);
 
   // --- Sticky Player Logic ---
   
@@ -721,6 +742,24 @@ Answer the questions in the task (in each task there's what should be said) usin
           const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
           streamRef.current = stream;
           
+          const speechEvents = hark(stream, { threshold: -50 });
+          harkRef.current = speechEvents;
+          
+          let silenceTimeout: NodeJS.Timeout;
+          
+          speechEvents.on('speaking', () => {
+              clearTimeout(silenceTimeout);
+              setIsSpeaking(true);
+          });
+          
+          speechEvents.on('stopped_speaking', () => {
+              // Add a small delay before considering the user silent
+              // This prevents cutting off the end of words or short pauses between words
+              silenceTimeout = setTimeout(() => {
+                  setIsSpeaking(false);
+              }, 1000); // 1 second of silence before pausing
+          });
+
           const mediaRecorder = new MediaRecorder(stream, { mimeType });
           mediaRecorderRef.current = mediaRecorder;
           audioChunksRef.current = [];
@@ -1715,7 +1754,7 @@ Answer the questions in the task (in each task there's what should be said) usin
                                   {speakingPhase === 'IDLE' && 'Готовы начать?'}
                                   {speakingPhase === 'PREPARING' && 'Подготовка...'}
                                   {speakingPhase === 'COUNTDOWN' && 'Приготовьтесь!'}
-                                  {speakingPhase === 'RECORDING' && 'Запись!'}
+                                  {speakingPhase === 'RECORDING' && (!isSpeaking ? 'Ожидание речи...' : 'Запись!')}
                                   {speakingPhase === 'UPLOADING' && 'Сохранение...'}
                                   {speakingPhase === 'FINISHED' && 'Готово'}
                               </div>
@@ -1810,12 +1849,30 @@ Answer the questions in the task (in each task there's what should be said) usin
                                       )}
 
                                       {/* Main Recording Indicator */}
-                                      <div className={`w-32 h-32 rounded-full flex flex-col items-center justify-center border-[6px] transition-all duration-500 shadow-xl ${isPaused ? 'border-amber-200 bg-amber-50' : 'border-rose-200 bg-rose-50 animate-pulse'}`}>
-                                          <div className={`text-2xl font-mono font-bold ${isPaused ? 'text-amber-600' : 'text-rose-600'}`}>
+                                      <div className={`w-32 h-32 rounded-full flex flex-col items-center justify-center border-[6px] transition-all duration-500 shadow-xl ${
+                                          isPaused ? 'border-amber-200 bg-amber-50' 
+                                          : isAudioPlaying ? 'border-indigo-200 bg-indigo-50'
+                                          : (!isSpeaking) ? 'border-slate-200 bg-slate-50'
+                                          : 'border-rose-200 bg-rose-50 animate-pulse'
+                                      }`}>
+                                          <div className={`text-2xl font-mono font-bold ${
+                                              isPaused ? 'text-amber-600' 
+                                              : isAudioPlaying ? 'text-indigo-600'
+                                              : (!isSpeaking) ? 'text-slate-600'
+                                              : 'text-rose-600'
+                                          }`}>
                                               {String(Math.floor(timer/60))}:{String(timer%60).padStart(2,'0')}
                                           </div>
-                                          <span className={`text-[10px] font-bold uppercase tracking-widest mt-1 ${isPaused ? 'text-amber-400' : 'text-rose-400'}`}>
-                                              {isPaused ? 'PAUSED' : 'RECORDING'}
+                                          <span className={`text-[10px] font-bold uppercase tracking-widest mt-1 text-center leading-tight ${
+                                              isPaused ? 'text-amber-400' 
+                                              : isAudioPlaying ? 'text-indigo-400'
+                                              : (!isSpeaking) ? 'text-slate-400'
+                                              : 'text-rose-400'
+                                          }`}>
+                                              {isPaused ? 'PAUSED' 
+                                              : isAudioPlaying ? 'QUESTION\nPLAYING'
+                                              : (!isSpeaking) ? 'LISTENING...'
+                                              : 'RECORDING'}
                                           </span>
                                       </div>
 
@@ -1861,11 +1918,17 @@ Answer the questions in the task (in each task there's what should be said) usin
                       </div>
                   </div>
                   <div className="flex flex-col justify-center gap-6 bg-white p-8 rounded-3xl shadow-xl border border-slate-100 text-center">
-                      <div className={`text-4xl font-bold font-mono mb-6 transition-all duration-300 ${speakingPhase === 'COUNTDOWN' ? 'text-indigo-600 scale-150' : 'text-slate-900'}`}>
+                      <div className={`text-4xl font-bold font-mono mb-2 transition-all duration-300 ${speakingPhase === 'COUNTDOWN' ? 'text-indigo-600 scale-150' : 'text-slate-900'}`}>
                           {String(Math.floor(timer/60))}:{String(timer%60).padStart(2,'0')}
                       </div>
                       
-                      {speakingPhase === 'UPLOADING' && <div className="text-slate-500 font-bold animate-pulse">Uploading...</div>}
+                      {speakingPhase === 'RECORDING' && (
+                          <div className={`text-sm font-bold uppercase tracking-widest mb-6 ${!isSpeaking ? 'text-slate-400' : 'text-rose-500 animate-pulse'}`}>
+                              {!isSpeaking ? 'Ожидание речи...' : 'Запись!'}
+                          </div>
+                      )}
+                      
+                      {speakingPhase === 'UPLOADING' && <div className="text-slate-500 font-bold animate-pulse mb-6">Uploading...</div>}
                       {speakingPhase === 'COUNTDOWN' && <div className="text-indigo-600 font-bold animate-bounce mb-4">Get ready!</div>}
 
                       {speakingPhase === 'IDLE' && !readOnly && (

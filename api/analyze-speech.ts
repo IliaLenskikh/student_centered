@@ -1,5 +1,54 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { OpenAI, toFile } from "openai";
+import ffmpeg from 'fluent-ffmpeg';
+import ffmpegStatic from 'ffmpeg-static';
+import { tmpdir } from 'os';
+import { join } from 'path';
+import { writeFile, readFile, unlink } from 'fs/promises';
+
+// Set ffmpeg path
+if (ffmpegStatic) {
+  ffmpeg.setFfmpegPath(ffmpegStatic);
+}
+
+async function removeSilence(inputBuffer: Buffer): Promise<Buffer> {
+  const tempId = Date.now() + '-' + Math.random().toString(36).substring(7);
+  const inputPath = join(tmpdir(), `${tempId}_input.webm`);
+  const outputPath = join(tmpdir(), `${tempId}_output.webm`);
+  
+  await writeFile(inputPath, inputBuffer);
+  
+  return new Promise((resolve, reject) => {
+    ffmpeg(inputPath)
+      // Remove silence at the beginning and in the middle
+      // start_periods=1: remove silence at start
+      // stop_periods=-1: remove silence in the middle/end
+      // stop_duration=1: 1 second of silence triggers removal
+      // threshold=-45dB: anything below -45dB is considered silence
+      .audioFilters('silenceremove=start_periods=1:start_duration=0.1:start_threshold=-45dB:stop_periods=-1:stop_duration=1:stop_threshold=-45dB')
+      .output(outputPath)
+      .on('end', async () => {
+        try {
+          const outputBuffer = await readFile(outputPath);
+          // Cleanup
+          await unlink(inputPath).catch(console.error);
+          await unlink(outputPath).catch(console.error);
+          resolve(outputBuffer);
+        } catch (err) {
+          reject(err);
+        }
+      })
+      .on('error', async (err) => {
+        // Cleanup
+        await unlink(inputPath).catch(console.error);
+        await unlink(outputPath).catch(console.error);
+        console.error('FFmpeg error:', err);
+        // If ffmpeg fails, fallback to original buffer
+        resolve(inputBuffer);
+      })
+      .run();
+  });
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
@@ -59,6 +108,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
        return res.status(400).json({ error: "Audio file too large. Maximum size is 15MB." });
     }
 
+    // Process audio to remove silence and reduce Whisper API costs
+    console.log("Processing audio to remove silence...");
+    try {
+      audioBuffer = await removeSilence(audioBuffer);
+      console.log("Processed audio buffer size:", audioBuffer.byteLength);
+    } catch (err) {
+      console.error("Failed to remove silence, proceeding with original audio:", err);
+    }
+
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
     // 1. Transcription via Whisper
@@ -72,10 +130,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // 2. Generate structured feedback
     console.log("Generating feedback...");
-    const prompt = `Проанализируй ответ студента: "${transcription.text}". 
-Задание было: "${taskContext}".
-${questions && Array.isArray(questions) && questions.length > 0 ? `В аудио задавались следующие вопросы:\n${questions.map((q: string, i: number) => `${i+1}. ${q}`).join('\n')}\nОцени, насколько полно и правильно студент ответил на эти вопросы.` : ''}
+    
+    const isInterview = questions && Array.isArray(questions) && questions.length > 0;
+    
+    let prompt = `Проанализируй ответ студента: "${transcription.text}".\nЗадание было: "${taskContext}".\n`;
+    
+    if (isInterview) {
+      prompt += `
+В задании есть текст вопросов:
+${questions.map((q: string, i: number) => `${i+1}. ${q}`).join('\n')}
 
+Нужно проверить, насколько правильно ученик ответил на эти вопросы с точки зрения грамматики, лексики и логики. 
+По сути, идеальный ответ ученика — это 6 правильных предложений (полные, развернутые ответы на заданные вопросы).
+`;
+    } else {
+      prompt += `Оцени ответ студента с точки зрения грамматики, лексики и содержания.\n`;
+    }
+
+    prompt += `
 Верни ответ в формате JSON со следующей структурой:
 {
   "mistakes": [
@@ -87,7 +159,7 @@ ${questions && Array.isArray(questions) && questions.length > 0 ? `В аудио
     }
   ],
   "sentenceCount": <число предложений в тексте>,
-  "generalFeedback": "общий комментарий и советы"
+  "generalFeedback": "общий комментарий и советы (если это интервью, обязательно укажи, на все ли вопросы даны ответы и насколько они полные/логичные)"
 }`;
 
     const completion = await openai.chat.completions.create({
