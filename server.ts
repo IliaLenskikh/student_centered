@@ -159,7 +159,7 @@ ${questions && Array.isArray(questions) && questions.length > 0 ? `В аудио
   });
 
   // 404 handler for API routes
-  app.all("/api/*", (req, res) => {
+  app.all("/api/*all", (req, res) => {
     res.status(404).json({ error: `API route not found: ${req.method} ${req.path}` });
   });
 
@@ -177,7 +177,7 @@ ${questions && Array.isArray(questions) && questions.length > 0 ? `В аудио
     app.use(express.static(distPath));
     
     // SPA fallback for production
-    app.get("*", (req, res) => {
+    app.get("*all", (req, res) => {
       res.sendFile("index.html", { root: distPath });
     });
   }

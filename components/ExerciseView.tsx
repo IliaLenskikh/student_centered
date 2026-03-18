@@ -6,6 +6,7 @@ import { supabase } from '../services/supabaseClient';
 import { saveInputs, loadInputs, saveAudioAttempt, loadAudioAttempts, clearAudioAttempts, clearInputs } from '../services/storageService';
 import { uploadSpeakingAudio, saveSpeakingAttempt, updateSpeakingAttemptFeedback, getSpeakingAttempts } from '../services/speakingService';
 import { ResultReview } from './ResultReview';
+import { WritingTaskSection } from './WritingTaskSection';
 
 interface ExerciseViewProps {
   story: Story;
@@ -1615,181 +1616,34 @@ Answer the questions in the task (in each task there's what should be said) usin
   };
 
   const renderWritingLayout = () => {
-      const effectiveReadOnly = readOnly || isReviewMode;
-      // Fallback if text/body missing
-      const taskText = story.text || story.emailBody || "Write your response below.";
-      
-      const wordCountClass = wordCount < 90 ? 'text-amber-500' : wordCount > 132 ? 'text-rose-500' : 'text-emerald-500';
-      
       return (
-          <div className="flex flex-col lg:flex-row gap-6 h-full min-h-[600px] lg:h-[calc(100vh-200px)]">
-             {/* Left Column: Editor/Answer */}
-             <div className="lg:w-2/3 order-1 lg:order-1 flex flex-col bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-200">
-                <div className="bg-slate-50 border-b border-slate-200 px-6 py-4 flex items-center justify-between">
-                   <h2 className="text-lg font-bold text-slate-800">{story.emailSubject || "New Email"}</h2>
-                   <span className="text-xs text-slate-400">Draft - Auto-saving</span>
-                </div>
-                <div className="flex-1 p-0 relative">
-                   <textarea
-                       value={emailContent}
-                       onChange={(e) => handleEmailChange(e.target.value)}
-                       placeholder="Start writing your email here..."
-                       readOnly={effectiveReadOnly}
-                       className="w-full h-full p-8 text-slate-700 text-lg leading-relaxed focus:outline-none resize-none custom-scrollbar"
-                   />
-                </div>
-                
-                {/* AI Suggestion Section */}
-                {showAiModal && (
-                    <div className="bg-indigo-50 border-t border-indigo-100 p-4">
-                        <div className="flex justify-between items-center mb-2">
-                            <span className="text-[10px] font-bold text-indigo-500 uppercase">AI Suggestion</span>
-                            <button onClick={() => setShowAiModal(false)} className="text-indigo-400 hover:text-indigo-600">
-                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                            </button>
-                        </div>
-                        <p className="text-xs text-indigo-700 italic">{aiSuggestion}</p>
-                    </div>
-                )}
-             </div>
-
-             {/* Right Column: Task & Stats */}
-             <div className="lg:w-1/3 order-2 lg:order-2 flex flex-col gap-4">
-                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex-1 flex flex-col">
-                   <h3 className="font-bold text-slate-800 mb-4 text-sm uppercase tracking-wide">Task</h3>
-                   <div className="prose prose-sm text-slate-600 mb-6 flex-1 overflow-y-auto custom-scrollbar">
-                      <p className="whitespace-pre-line leading-relaxed">{taskText}</p>
-                   </div>
-                   
-                   <div className="border-t border-slate-100 pt-4 mt-auto">
-                      <div className="flex items-center justify-between mb-2">
-                          <h4 className="font-bold text-slate-800 text-xs uppercase">Stats</h4>
-                          {lastSaved && <span className="text-[10px] text-slate-400">Saved: {lastSaved}</span>}
-                      </div>
-                      <div className="space-y-3">
-                          <div className="flex items-center gap-3 text-sm text-slate-600">
-                             <div className={`w-3 h-3 rounded-full ${wordCount >= 100 && wordCount <= 120 ? 'bg-emerald-500' : (wordCount >= 90 && wordCount <= 132 ? 'bg-amber-400' : 'bg-slate-300')}`} />
-                             <span className="flex-1">Word count: <span className={`font-mono font-bold ${wordCountClass}`}>{wordCount}</span> / 100-120</span>
-                          </div>
-                       </div>
-                       
-                       {isReviewMode && !aiFeedback && (
-                           <button 
-                            onClick={handleEvaluateWriting}
-                            disabled={isAiLoading}
-                            className="w-full mt-6 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold py-3 px-4 rounded-xl border border-indigo-200 transition-all active:scale-95 disabled:opacity-70 flex items-center justify-center gap-2"
-                           >
-                               {isAiLoading ? "Анализ..." : "Проверить с ИИ (Beta)"}
-                           </button>
-                       )}
-
-                       {isReviewMode && aiFeedback && (
-                           <div className="mt-6 p-4 bg-emerald-50 rounded-xl border border-emerald-100">
-                               <h4 className="font-bold text-emerald-800 text-xs uppercase mb-2">AI Feedback</h4>
-                               <div className="flex items-center gap-2 mb-2">
-                                   <div className="flex-1 h-2 bg-emerald-100 rounded-full overflow-hidden">
-                                       <div className="bg-emerald-500 h-full rounded-full" style={{ width: `${(aiFeedback.score || 0) * 10}%` }}></div>
-                                   </div>
-                                   <span className="font-bold text-emerald-600 text-sm">{aiFeedback.score}/10</span>
-                               </div>
-                               <p className="text-xs text-emerald-700 leading-relaxed mb-3">{aiFeedback.feedback}</p>
-                               {aiFeedback.mistakes && aiFeedback.mistakes.length > 0 && (
-                                   <ul className="text-[10px] text-emerald-600 list-disc list-inside space-y-1">
-                                       {aiFeedback.mistakes.map((m, i) => <li key={i}>{m}</li>)}
-                                   </ul>
-                               )}
-                               
-                               <div className="mt-4 pt-4 border-t border-emerald-100">
-                                   {!generatedAnswers[-1] ? (
-                                       <button 
-                                           onClick={() => generateCorrectedAnswer(-1, emailContent, taskText)}
-                                           disabled={isGeneratingAnswer[-1]}
-                                           className="w-full bg-white hover:bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-2 rounded-lg font-bold text-xs transition-all active:scale-95 flex items-center justify-center gap-2"
-                                       >
-                                           {isGeneratingAnswer[-1] ? "Генерация..." : "Показать идеальный ответ"}
-                                       </button>
-                                   ) : (
-                                       <div className="bg-white p-3 rounded-lg border border-emerald-100">
-                                           <span className="text-[10px] font-bold text-emerald-500 uppercase block mb-1">Идеальный ответ</span>
-                                           <p className="text-sm text-emerald-900 whitespace-pre-wrap leading-relaxed">{generatedAnswers[-1]}</p>
-                                       </div>
-                                   )}
-                               </div>
-                           </div>
-                       )}
-
-                       {isReviewMode && !readOnly && (
-                           <button 
-                               onClick={() => {
-                                   setViewingResult(null);
-                                   setEmailContent('');
-                                   setAiFeedback(null);
-                                   setShowResults(false);
-                               }}
-                               className="w-full mt-3 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 px-4 py-3 rounded-xl font-bold text-sm transition-all active:scale-95 flex items-center justify-center gap-2"
-                           >
-                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-                               Попробовать снова
-                           </button>
-                       )}
-
-                       {!effectiveReadOnly && (
-                           <button 
-                            onClick={handleSubmitWriting} 
-                            disabled={isSubmittingWriting}
-                            className="w-full mt-6 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-xl shadow-lg shadow-indigo-200 transition-all active:scale-95 disabled:opacity-70 flex items-center justify-center gap-2"
-                           >
-                               {isSubmittingWriting ? (
-                                   <>
-                                   <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                                   Sending...
-                                   </>
-                               ) : "Submit to Teacher"}
-                           </button>
-                       )}
-                   </div>
-                </div>
-             </div>
-
-             <div className="lg:w-2/3 order-1 lg:order-2 flex flex-col bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-200">
-                <div className="bg-slate-50 border-b border-slate-200 px-6 py-4 flex items-center justify-between">
-                   <h2 className="text-lg font-bold text-slate-800">{story.emailSubject || "New Email"}</h2>
-                   <span className="text-xs text-slate-400">Draft - Auto-saving</span>
-                </div>
-                <div className="flex-1 overflow-y-auto bg-white custom-scrollbar p-6">
-                   <div className="mb-8 p-4 bg-slate-50 rounded-xl border border-slate-100">
-                      <div className="flex justify-between items-baseline mb-2">
-                         <span className="font-bold text-slate-900">{story.emailSender || "Friend"}</span>
-                         <span className="text-xs text-slate-400">Received recently</span>
-                      </div>
-                      <p className="text-slate-700 whitespace-pre-line leading-relaxed">{story.emailBody}</p>
-                   </div>
-
-                   <div className="relative group h-full flex flex-col">
-                      <div className="mb-2 text-xs text-slate-400 flex justify-between items-center">
-                         <span>To: Teacher</span>
-                         {!readOnly && (
-                             <div className="flex gap-2">
-                                <button onClick={() => handleGetWritingSuggestion('greeting')} className="text-indigo-500 hover:text-indigo-700 font-bold text-[10px] uppercase tracking-wide bg-indigo-50 hover:bg-indigo-100 px-2 py-1 rounded transition-colors">Greeting</button>
-                                <button onClick={() => handleGetWritingSuggestion('body')} className="text-indigo-500 hover:text-indigo-700 font-bold text-[10px] uppercase tracking-wide bg-indigo-50 hover:bg-indigo-100 px-2 py-1 rounded transition-colors">Body</button>
-                                <button onClick={() => handleGetWritingSuggestion('closing')} className="text-indigo-500 hover:text-indigo-700 font-bold text-[10px] uppercase tracking-wide bg-indigo-50 hover:bg-indigo-100 px-2 py-1 rounded transition-colors">Closing</button>
-                                <button onClick={() => handleGetWritingSuggestion('rewrite')} className="text-emerald-500 hover:text-emerald-700 font-bold text-[10px] uppercase tracking-wide bg-emerald-50 hover:bg-emerald-100 px-2 py-1 rounded transition-colors">Rewrite</button>
-                             </div>
-                         )}
-                      </div>
-                      <textarea
-                         className={`w-full flex-1 p-4 text-slate-800 text-lg leading-relaxed outline-none resize-none border-2 border-transparent focus:border-indigo-100 rounded-xl transition-all bg-slate-50 focus:bg-white ${readOnly ? 'opacity-70 cursor-not-allowed' : ''}`}
-                         placeholder="Write your reply here..."
-                         value={emailContent}
-                         onChange={(e) => handleEmailChange(e.target.value)}
-                         spellCheck={false}
-                         disabled={readOnly}
-                      />
-                   </div>
-                </div>
-             </div>
-          </div>
-      )
+          <WritingTaskSection 
+            story={story}
+            userProfile={userProfile || { id: 'anonymous', name: 'Student', email: '' } as UserProfile}
+            initialContent={emailContent}
+            onContentChange={setEmailContent}
+            readOnly={effectiveReadOnly}
+            onComplete={(score, maxScore) => {
+              const details: AttemptDetail[] = [{
+                  question: 'Email Writing Task',
+                  userAnswer: emailContent,
+                  correctAnswer: 'AI Evaluated',
+                  isCorrect: score >= 5,
+                  context: story.text || story.emailBody,
+                  wordCount: emailContent.trim() ? emailContent.trim().split(/\s+/).length : 0,
+                  aiFeedback: { score, feedback: 'Evaluated by AI' }
+              }];
+              
+              if (typeof window !== 'undefined') {
+                  localStorage.removeItem(`draft_${story.title}`);
+              }
+              
+              onComplete(score, maxScore, details);
+              setSpeakingPhase('FINISHED'); 
+              clearInputs(story.title);
+            }}
+          />
+      );
   };
 
   const renderSpeaking = () => {
