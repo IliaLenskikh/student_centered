@@ -663,14 +663,15 @@ Answer the questions in the task (in each task there's what should be said) usin
       if (!mediaRecorderRef.current) return;
       if (isPaused) return; // Manual pause overrides auto-pause
 
-      const shouldRecord = isSpeaking && !isAudioPlaying;
+      // We still want to pause recording when the question is playing to avoid feedback
+      const shouldRecord = !isAudioPlaying;
 
       if (shouldRecord && mediaRecorderRef.current.state === 'paused') {
           mediaRecorderRef.current.resume();
       } else if (!shouldRecord && mediaRecorderRef.current.state === 'recording') {
           mediaRecorderRef.current.pause();
       }
-  }, [isSpeaking, isAudioPlaying, isPaused]);
+  }, [isAudioPlaying, isPaused]);
 
   // --- Sticky Player Logic ---
   
@@ -1754,7 +1755,7 @@ Answer the questions in the task (in each task there's what should be said) usin
                                   {speakingPhase === 'IDLE' && 'Готовы начать?'}
                                   {speakingPhase === 'PREPARING' && 'Подготовка...'}
                                   {speakingPhase === 'COUNTDOWN' && 'Приготовьтесь!'}
-                                  {speakingPhase === 'RECORDING' && (!isSpeaking ? 'Ожидание речи...' : 'Запись!')}
+                                  {speakingPhase === 'RECORDING' && 'Запись!'}
                                   {speakingPhase === 'UPLOADING' && 'Сохранение...'}
                                   {speakingPhase === 'FINISHED' && 'Готово'}
                               </div>
@@ -1852,13 +1853,11 @@ Answer the questions in the task (in each task there's what should be said) usin
                                       <div className={`w-32 h-32 rounded-full flex flex-col items-center justify-center border-[6px] transition-all duration-500 shadow-xl ${
                                           isPaused ? 'border-amber-200 bg-amber-50' 
                                           : isAudioPlaying ? 'border-indigo-200 bg-indigo-50'
-                                          : (!isSpeaking) ? 'border-slate-200 bg-slate-50'
                                           : 'border-rose-200 bg-rose-50 animate-pulse'
                                       }`}>
                                           <div className={`text-2xl font-mono font-bold ${
                                               isPaused ? 'text-amber-600' 
                                               : isAudioPlaying ? 'text-indigo-600'
-                                              : (!isSpeaking) ? 'text-slate-600'
                                               : 'text-rose-600'
                                           }`}>
                                               {String(Math.floor(timer/60))}:{String(timer%60).padStart(2,'0')}
@@ -1866,12 +1865,10 @@ Answer the questions in the task (in each task there's what should be said) usin
                                           <span className={`text-[10px] font-bold uppercase tracking-widest mt-1 text-center leading-tight ${
                                               isPaused ? 'text-amber-400' 
                                               : isAudioPlaying ? 'text-indigo-400'
-                                              : (!isSpeaking) ? 'text-slate-400'
                                               : 'text-rose-400'
                                           }`}>
                                               {isPaused ? 'PAUSED' 
                                               : isAudioPlaying ? 'QUESTION\nPLAYING'
-                                              : (!isSpeaking) ? 'LISTENING...'
                                               : 'RECORDING'}
                                           </span>
                                       </div>
@@ -1923,8 +1920,8 @@ Answer the questions in the task (in each task there's what should be said) usin
                       </div>
                       
                       {speakingPhase === 'RECORDING' && (
-                          <div className={`text-sm font-bold uppercase tracking-widest mb-6 ${!isSpeaking ? 'text-slate-400' : 'text-rose-500 animate-pulse'}`}>
-                              {!isSpeaking ? 'Ожидание речи...' : 'Запись!'}
+                          <div className="text-sm font-bold uppercase tracking-widest mb-6 text-rose-500 animate-pulse">
+                              Запись!
                           </div>
                       )}
                       
