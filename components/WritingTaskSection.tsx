@@ -478,7 +478,7 @@ REQUIREMENTS:
 
                 {/* Editor Footer */}
                 <div className="px-6 py-4 border-t border-slate-100 bg-white flex justify-end items-center shrink-0 rounded-b-2xl">
-                  {!readOnly && (
+                  {!readOnly ? (
                     <button 
                       onClick={handleSend}
                       disabled={isSending || currentText.trim().length === 0}
@@ -491,6 +491,29 @@ REQUIREMENTS:
                       )}
                       {isSending ? 'Evaluating...' : 'Send & Evaluate'}
                     </button>
+                  ) : (
+                    evaluation ? (
+                      <button 
+                        onClick={() => setShowEvaluationModal(true)}
+                        className="flex items-center gap-2 px-6 py-2.5 rounded-xl font-semibold text-sm transition-all duration-300 bg-emerald-600 hover:bg-emerald-700 text-white shadow-[0_4px_14px_0_rgba(16,185,129,0.39)] hover:shadow-[0_6px_20px_rgba(16,185,129,0.23)] hover:-translate-y-0.5"
+                      >
+                        <Sparkles className="w-4 h-4" />
+                        Посмотреть оценку ИИ
+                      </button>
+                    ) : (
+                      <button 
+                        onClick={handleSend}
+                        disabled={isSending || currentText.trim().length === 0}
+                        className="flex items-center gap-2 px-6 py-2.5 rounded-xl font-semibold text-sm transition-all duration-300 bg-indigo-600 hover:bg-indigo-700 text-white shadow-[0_4px_14px_0_rgba(79,70,229,0.39)] hover:shadow-[0_6px_20px_rgba(79,70,229,0.23)] hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none"
+                      >
+                        {isSending ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Sparkles className="w-4 h-4" />
+                        )}
+                        {isSending ? 'Анализ...' : 'Получить оценку ИИ'}
+                      </button>
+                    )
                   )}
                 </div>
               </div>

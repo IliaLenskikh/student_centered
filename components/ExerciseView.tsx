@@ -49,6 +49,38 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const historyDropdownRef = useRef<HTMLDivElement>(null);
 
+  const [score, setScore] = useState(0);
+  const [loadingExplanation, setLoadingExplanation] = useState<string | null>(null);
+  const [explanations, setExplanations] = useState<{[key: string]: string}>({});
+  const [checkedSections, setCheckedSections] = useState<{[key: number]: boolean}>({});
+  const [showTranscript, setShowTranscript] = useState<{[key: number]: boolean}>({});
+  
+  // Speaking State - General
+  const [speakingPhase, setSpeakingPhase] = useState<'IDLE' | 'PREPARING' | 'COUNTDOWN' | 'RECORDING' | 'REVIEW' | 'FINISHED' | 'UPLOADING'>('IDLE');
+  const [timer, setTimer] = useState(0);
+  const timerRef = useRef<number | null>(null);
+
+  const [attempts, setAttempts] = useState<{ blob?: Blob; url: string; timestamp: string; id?: string; aiFeedback?: any; transcription?: string; originalIndex?: number }[]>([]);
+  const [selectedAttemptIndex, setSelectedAttemptIndex] = useState<number | null>(null);
+
+  // Writing State
+  const [emailContent, setEmailContent] = useState('');
+  const [wordCount, setWordCount] = useState(0);
+  const [isSubmittingWriting, setIsSubmittingWriting] = useState(false);
+  const [lastSaved, setLastSaved] = useState<string | null>(null);
+  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'idle'>('idle');
+
+  // AI State
+  const [aiSuggestion, setAiSuggestion] = useState<string | null>(null);
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [aiFeedback, setAiFeedback] = useState<{score?: number, feedback?: string, mistakes?: string[]} | null>(null);
+  const [aiFeedbackData, setAiFeedbackData] = useState<Record<number, any>>({});
+  const [isAnalyzing, setIsAnalyzing] = useState<Record<number, boolean>>({});
+  const [showAiModal, setShowAiModal] = useState(false);
+  const [highlightedField, setHighlightedField] = useState<string | null>(null);
+  const [generatedAnswers, setGeneratedAnswers] = useState<Record<number, string>>({});
+  const [isGeneratingAnswer, setIsGeneratingAnswer] = useState<Record<number, boolean>>({});
+
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (historyDropdownRef.current && !historyDropdownRef.current.contains(event.target as Node)) {
@@ -78,20 +110,6 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
   // If viewingResult is present, we are in review mode
   const isReviewMode = !!viewingResult;
   const effectiveReadOnly = readOnly || isReviewMode;
-
-  const [score, setScore] = useState(0);
-  const [loadingExplanation, setLoadingExplanation] = useState<string | null>(null);
-  const [explanations, setExplanations] = useState<{[key: string]: string}>({});
-  const [checkedSections, setCheckedSections] = useState<{[key: number]: boolean}>({});
-  const [showTranscript, setShowTranscript] = useState<{[key: number]: boolean}>({});
-  
-  // Speaking State - General
-  const [speakingPhase, setSpeakingPhase] = useState<'IDLE' | 'PREPARING' | 'COUNTDOWN' | 'RECORDING' | 'REVIEW' | 'FINISHED' | 'UPLOADING'>('IDLE');
-  const [timer, setTimer] = useState(0);
-  const timerRef = useRef<number | null>(null);
-
-  const [attempts, setAttempts] = useState<{ blob?: Blob; url: string; timestamp: string; id?: string; aiFeedback?: any; transcription?: string }[]>([]);
-  const [selectedAttemptIndex, setSelectedAttemptIndex] = useState<number | null>(null);
 
   // Fetch past attempts from Supabase
   useEffect(() => {
@@ -130,7 +148,7 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
       if (viewingResult && viewingResult.details) {
           const newInputs: UserProgress = {};
           const newValidation: ValidationState = {};
-          const newAttempts: { blob: Blob; url: string; timestamp: string }[] = [];
+          const newAttempts: { blob: Blob; url: string; timestamp: string; originalIndex?: number }[] = [];
           
           let detailIndex = 0;
           const details = viewingResult.details;
@@ -178,12 +196,13 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
           if (type === ExerciseType.SPEAKING || type === ExerciseType.ORAL_SPEECH) {
               // For speaking, details contain audioUrl
               const newAiFeedbackData: Record<number, any> = {};
-              details.forEach((d) => {
+              details.forEach((d, idx) => {
                   if (d.audioUrl) {
                       newAttempts.push({
                           blob: new Blob(), // Dummy blob
                           url: d.audioUrl,
-                          timestamp: new Date(viewingResult.created_at).toLocaleTimeString()
+                          timestamp: new Date(viewingResult.created_at).toLocaleTimeString(),
+                          originalIndex: idx
                       });
                       if (d.aiFeedback) {
                           newAiFeedbackData[newAttempts.length - 1] = d.aiFeedback;
@@ -257,22 +276,7 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
   const [recordingError, setRecordingError] = useState<string | null>(null);
   
   // Writing State
-  const [emailContent, setEmailContent] = useState('');
-  const [wordCount, setWordCount] = useState(0);
-  const [isSubmittingWriting, setIsSubmittingWriting] = useState(false);
-  const [lastSaved, setLastSaved] = useState<string | null>(null);
-  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'idle'>('idle');
-
   // AI State
-  const [aiSuggestion, setAiSuggestion] = useState<string | null>(null);
-  const [isAiLoading, setIsAiLoading] = useState(false);
-  const [aiFeedback, setAiFeedback] = useState<{score?: number, feedback?: string, mistakes?: string[]} | null>(null);
-  const [aiFeedbackData, setAiFeedbackData] = useState<Record<number, any>>({});
-  const [isAnalyzing, setIsAnalyzing] = useState<Record<number, boolean>>({});
-  const [showAiModal, setShowAiModal] = useState(false);
-  const [highlightedField, setHighlightedField] = useState<string | null>(null);
-  const [generatedAnswers, setGeneratedAnswers] = useState<Record<number, string>>({});
-  const [isGeneratingAnswer, setIsGeneratingAnswer] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
     if (aiFeedback && !readOnly && !viewingResult) {
@@ -383,9 +387,10 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
       // Persist to database if we are in review mode
       if (viewingResult) {
           const updatedDetails = [...viewingResult.details];
-          if (updatedDetails[index]) {
-              updatedDetails[index] = {
-                  ...updatedDetails[index],
+          const targetIndex = attempts[index]?.originalIndex ?? index;
+          if (updatedDetails[targetIndex]) {
+              updatedDetails[targetIndex] = {
+                  ...updatedDetails[targetIndex],
                   aiFeedback: data
               };
               updateResultWithFeedback(viewingResult.id, updatedDetails);
@@ -1634,6 +1639,19 @@ Answer the questions in the task (in each task there's what should be said) usin
             onContentChange={setEmailContent}
             readOnly={effectiveReadOnly}
             onComplete={(score, maxScore, aiDetails) => {
+              const aiFeedbackItem = aiDetails?.[0] || { score, feedback: 'Evaluated by AI' };
+              
+              if (viewingResult) {
+                  const updatedDetails = viewingResult.details.map(d => {
+                      if (d.question === 'Email Writing Task') {
+                          return { ...d, aiFeedback: aiFeedbackItem };
+                      }
+                      return d;
+                  });
+                  updateResultWithFeedback(viewingResult.id, updatedDetails);
+                  return;
+              }
+
               const details: AttemptDetail[] = [{
                   question: 'Email Writing Task',
                   userAnswer: emailContent,
@@ -1641,7 +1659,7 @@ Answer the questions in the task (in each task there's what should be said) usin
                   isCorrect: score >= 5,
                   context: story.text || story.emailBody,
                   wordCount: emailContent.trim() ? emailContent.trim().split(/\s+/).length : 0,
-                  aiFeedback: aiDetails?.[0] || { score, feedback: 'Evaluated by AI' }
+                  aiFeedback: aiFeedbackItem
               }];
               
               if (typeof window !== 'undefined') {
