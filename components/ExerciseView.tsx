@@ -131,17 +131,23 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
                 setSpeakingPhase('REVIEW');
                 setSelectedAttemptIndex(0);
                 
-                // Also populate aiFeedbackData
+                // Also populate aiFeedbackData and generatedAnswers
                 const newAiFeedbackData: Record<number, any> = {};
+                const newGeneratedAnswers: Record<number, string> = {};
                 mappedAttempts.forEach((att, idx) => {
                     if (att.aiFeedback) {
                         newAiFeedbackData[idx] = {
                             feedback: att.aiFeedback,
                             transcription: att.transcription
                         };
+                        // Check for correctedAnswer in aiFeedback object
+                        if (att.aiFeedback.correctedAnswer) {
+                            newGeneratedAnswers[idx] = att.aiFeedback.correctedAnswer;
+                        }
                     }
                 });
                 setAiFeedbackData(newAiFeedbackData);
+                setGeneratedAnswers(newGeneratedAnswers);
             }
         });
     }
@@ -299,6 +305,7 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
               setInputs(prev => ({ ...prev, ...savedInputs }));
               if (savedInputs.email) setEmailContent(savedInputs.email);
               if (savedInputs.aiFeedback) setAiFeedback(savedInputs.aiFeedback);
+              if (savedInputs.generatedAnswers) setGeneratedAnswers(savedInputs.generatedAnswers);
           }
 
           loadAudioAttempts(story.title).then(savedAttempts => {
@@ -388,6 +395,23 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
           await updateSpeakingAttemptFeedback(attemptId, data.feedback, data.transcription);
       }
 
+      // Automatically generate corrected answer if not present
+      if (!generatedAnswers[index]) {
+          generateCorrectedAnswer(index, data.transcription, taskContext);
+      }
+
+      // Mark as complete and persist to database
+      const details: AttemptDetail[] = [{
+          question: story.speakingType === 'interview' ? 'Interview Speaking Task' : 'Speaking Task',
+          userAnswer: data.transcription,
+          correctAnswer: 'AI Evaluated',
+          isCorrect: (data.feedback.score || 0) >= 5,
+          context: taskContext,
+          aiFeedback: data
+      }];
+      
+      onComplete(data.feedback.score || 0, 10, details);
+
       // Persist to database if we are in review mode
       if (viewingResult) {
           const updatedDetails = [...viewingResult.details];
@@ -417,16 +441,31 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
         prompt = `Task: "${taskContext}"
 Student's answer: "${transcription}"
 
-Write an ideal email response for this task. Use 10-12 sentences.
+Write an ideal email response for this task. Use 100-120 words.
 The vocabulary must be B1 level, no fancy grammar structures, all ideas must be connected.
 Base your answer on the student's original ideas if possible, but ensure all task requirements are met.
 Format it as a natural email (Greeting, Body, Closing).`;
       } else {
         // Speaking
-        prompt = `Task: "${taskContext}"
+        const isInterview = story.speakingType === 'interview' || (story.speakingQuestions && story.speakingQuestions.length > 0);
+        
+        if (isInterview) {
+            prompt = `You are an English tutor. Provide a sample answer for an interview task.
+The task consists of these questions:
+"${taskContext}"
+
+Your response MUST be exactly 6 separate sentences. 
+Each sentence must be a direct, full, and natural answer to one of the questions in order.
+DO NOT use any connecting words between sentences (like "Firstly", "Also", "In addition").
+DO NOT make it a cohesive story. 
+Just 6 independent sentences, one after another.
+Level: B2/C1.`;
+        } else {
+            prompt = `Task: "${taskContext}"
 Student's answer: "${transcription}"
 
 Answer the questions in the task (in each task there's what should be said) using 10-12 sentences. Each answer starts with "I am going to talk about ...." or something similar and ends with "that's all I wanted to say". The vocabulary must be B1 level, no fancy grammar structures, all ideas must be connected. Base your answer on the student's original ideas if possible, but ensure all task requirements are met.`;
+        }
       }
       
       const response = await fetch('/api/generate-content', {
@@ -438,6 +477,22 @@ Answer the questions in the task (in each task there's what should be said) usin
       if (!response.ok) throw new Error('Failed to generate answer');
       const data = await response.json();
       setGeneratedAnswers(prev => ({ ...prev, [index]: data.text }));
+
+      // Persist to speaking_attempts
+      if (index !== -1) {
+          const attemptId = attempts[index]?.id;
+          if (attemptId) {
+              const currentFeedback = aiFeedbackData[index]?.feedback || {};
+              await updateSpeakingAttemptFeedback(attemptId, { ...currentFeedback, correctedAnswer: data.text }, aiFeedbackData[index]?.transcription);
+          }
+      }
+
+      // Persist to localStorage
+      if (!readOnly) {
+          const currentInputs = loadInputs(story.title) || {};
+          const newGeneratedAnswers = { ...generatedAnswers, [index]: data.text };
+          saveInputs(story.title, { ...currentInputs, generatedAnswers: newGeneratedAnswers });
+      }
     } catch (error) {
       console.error(error);
       setGeneratedAnswers(prev => ({ ...prev, [index]: "Не удалось сгенерировать ответ." }));
@@ -1540,8 +1595,16 @@ Answer the questions in the task (in each task there's what should be said) usin
   };
 
   const handleEvaluateSpeaking = async () => {
-    // Since we don't have real audio transcription, we'll ask the user to type what they said or evaluate the task context
-    // For Read Aloud, we can evaluate the text difficulty
+    // For Monologue/Interview, we use the first attempt if available
+    if (attempts.length > 0) {
+        const latestIdx = attempts.length - 1;
+        const latestAttempt = attempts[latestIdx];
+        const context = story.speakingQuestions?.join('\n') || story.text || story.title;
+        getAIFeedback(latestIdx, latestAttempt.url, context, story.speakingQuestions);
+        return;
+    }
+
+    // Fallback for read-aloud or if no attempts yet
     if (story.speakingType === 'read-aloud' && story.text) {
         setIsAiLoading(true);
         setAiFeedback(null);
@@ -1573,6 +1636,18 @@ Answer the questions in the task (in each task there's what should be said) usin
       const taskContext = story.text || story.emailBody || story.title;
       const result = await evaluateWriting(emailContent, taskContext);
       setAiFeedback(result);
+
+      // Mark as complete
+      const details: AttemptDetail[] = [{
+          question: 'Email Writing Task',
+          userAnswer: emailContent,
+          correctAnswer: 'AI Evaluated',
+          isCorrect: result.score >= 5,
+          context: taskContext,
+          wordCount: emailContent.trim().split(/\s+/).filter(w => w.length > 0).length,
+          aiFeedback: result
+      }];
+      onComplete(result.score, 10, details);
 
       // Persist to database if we are in review mode
       if (viewingResult && viewingResult.details && viewingResult.details.length > 0) {

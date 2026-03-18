@@ -65,6 +65,7 @@ export const WritingTaskSection: React.FC<WritingTaskSectionProps> = ({
   const [isGenerating, setIsGenerating] = useState<Record<string, boolean>>({});
   const [isRewriting, setIsRewriting] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [isGeneratingIdeal, setIsGeneratingIdeal] = useState(false);
   const [evaluation, setEvaluation] = useState<any>(initialEvaluation);
   const [showEvaluationModal, setShowEvaluationModal] = useState(false);
 
@@ -178,6 +179,40 @@ ${textToProcess}
       setShowEvaluationModal(true);
     } finally {
       setIsSending(false);
+    }
+  };
+
+  const handleGenerateIdealAnswer = async () => {
+    const textToProcess = currentText;
+    if (!textToProcess.trim()) return;
+    
+    setIsGeneratingIdeal(true);
+    try {
+      const openai = new OpenAI({ apiKey: import.meta.env.VITE_OPENAI_API_KEY || import.meta.env.OPENAI_API_KEY || '', dangerouslyAllowBrowser: true });
+      const prompt = `Task: "${story.text || ''}"
+Incoming Email: "${story.emailBody || ''}"
+Student's answer: "${textToProcess}"
+
+Write an ideal email response for this task. Use 100-120 words.
+The vocabulary must be B1 level, no fancy grammar structures, all ideas must be connected.
+Base your answer on the student's original ideas if possible, but ensure all task requirements are met.
+Format it as a natural email (Greeting, Body, Closing).`;
+      
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: prompt }],
+      });
+      
+      const idealAnswer = response.choices[0]?.message?.content?.trim() || "";
+      const newEvaluation = { ...evaluation, correctedAnswer: idealAnswer };
+      setEvaluation(newEvaluation);
+      if (onEvaluationChange) {
+        onEvaluationChange(newEvaluation);
+      }
+    } catch (error) {
+      console.error("Failed to generate ideal answer:", error);
+    } finally {
+      setIsGeneratingIdeal(false);
     }
   };
 
@@ -570,6 +605,44 @@ REQUIREMENTS:
                   {evaluation.text}
                 </div>
               </div>
+
+              {evaluation.correctedAnswer && (
+                <div className="p-6 bg-indigo-50 rounded-2xl border border-indigo-100">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="w-5 h-5 text-indigo-600" />
+                      <h4 className="font-bold text-indigo-900">Идеальный ответ (AI)</h4>
+                    </div>
+                    <button 
+                      onClick={() => {
+                        const newEval = { ...evaluation };
+                        delete newEval.correctedAnswer;
+                        setEvaluation(newEval);
+                        if (onEvaluationChange) onEvaluationChange(newEval);
+                      }}
+                      className="text-indigo-400 hover:text-indigo-600"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <div className="prose prose-indigo prose-sm max-w-none text-indigo-800 whitespace-pre-wrap leading-relaxed">
+                    {evaluation.correctedAnswer}
+                  </div>
+                </div>
+              )}
+
+              {!evaluation.correctedAnswer && (
+                <div className="flex justify-center">
+                  <button 
+                    onClick={handleGenerateIdealAnswer}
+                    disabled={isGeneratingIdeal || readOnly}
+                    className="flex items-center gap-2 px-6 py-3 bg-indigo-100 text-indigo-700 rounded-xl font-bold hover:bg-indigo-200 transition-all disabled:opacity-50"
+                  >
+                    {isGeneratingIdeal ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                    Сгенерировать идеальный ответ
+                  </button>
+                </div>
+              )}
             </div>
             
             <div className="mt-6 flex justify-end shrink-0">

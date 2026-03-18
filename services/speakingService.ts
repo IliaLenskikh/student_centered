@@ -61,7 +61,7 @@ export const getSpeakingAttempts = async (studentId: string, exerciseTitle: stri
     query = query.eq('task_id', taskId);
   }
 
-  const { data, error } = await query.order('created_at', { ascending: false });
+  const { data, error } = await query.order('created_at', { ascending: true });
 
   if (error) {
     console.error('Error fetching speaking attempts:', error);
