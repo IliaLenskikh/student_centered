@@ -118,13 +118,30 @@ export const getWritingSuggestions = async (
   }
 };
 
-export const getSpeakingSuggestion = async (taskContext: string): Promise<string> => {
-  const prompt = `
-    You are an English tutor. Provide a sample answer (3-4 sentences) for the following speaking task.
-    Task: "${taskContext}"
-    Level: B2/C1
-    Keep it natural and spoken-style.
-  `;
+export const getSpeakingSuggestion = async (taskContext: string, isInterview: boolean = false): Promise<string> => {
+  let prompt = "";
+  
+  if (isInterview) {
+    prompt = `
+      You are an English tutor. Provide a sample answer for an interview task.
+      The task consists of these questions:
+      "${taskContext}"
+      
+      Your response MUST be exactly 6 separate sentences. 
+      Each sentence must be a direct, full, and natural answer to one of the questions in order.
+      DO NOT use any connecting words between sentences (like "Firstly", "Also", "In addition").
+      DO NOT make it a cohesive story. 
+      Just 6 independent sentences, one after another.
+      Level: B2/C1.
+    `;
+  } else {
+    prompt = `
+      You are an English tutor. Provide a sample answer (3-4 sentences) for the following speaking task.
+      Task: "${taskContext}"
+      Level: B2/C1
+      Keep it natural and spoken-style.
+    `;
+  }
 
   try {
     const text = await generateContent(prompt);

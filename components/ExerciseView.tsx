@@ -1528,8 +1528,9 @@ Answer the questions in the task (in each task there's what should be said) usin
     setAiSuggestion(null);
     setShowAiModal(true);
     try {
-      const context = story.text || story.speakingQuestions?.join('\n') || story.title;
-      const suggestion = await getSpeakingSuggestion(context);
+      const isInterview = story.speakingType === 'interview' || (story.speakingQuestions && story.speakingQuestions.length > 0);
+      const context = story.speakingQuestions?.join('\n') || story.text || story.title;
+      const suggestion = await getSpeakingSuggestion(context, !!isInterview);
       setAiSuggestion(suggestion);
     } catch (error) {
       setAiSuggestion("Failed to get suggestion.");
