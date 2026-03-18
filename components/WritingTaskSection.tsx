@@ -17,6 +17,8 @@ interface WritingTaskSectionProps {
   onComplete: (score: number, maxScore: number, details: any[]) => void;
   readOnly?: boolean;
   initialContent?: string;
+  initialEvaluation?: any;
+  onEvaluationChange?: (evaluation: any) => void;
   onContentChange?: (content: string) => void;
 }
 
@@ -52,6 +54,8 @@ export const WritingTaskSection: React.FC<WritingTaskSectionProps> = ({
   onComplete, 
   readOnly = false,
   initialContent = "",
+  initialEvaluation = null,
+  onEvaluationChange,
   onContentChange
 }) => {
   const [showHints, setShowHints] = useState(false);
@@ -61,7 +65,7 @@ export const WritingTaskSection: React.FC<WritingTaskSectionProps> = ({
   const [isGenerating, setIsGenerating] = useState<Record<string, boolean>>({});
   const [isRewriting, setIsRewriting] = useState(false);
   const [isSending, setIsSending] = useState(false);
-  const [evaluation, setEvaluation] = useState<any>(null);
+  const [evaluation, setEvaluation] = useState<any>(initialEvaluation);
   const [showEvaluationModal, setShowEvaluationModal] = useState(false);
 
   // Initialize blocks from initialContent if provided
@@ -70,6 +74,12 @@ export const WritingTaskSection: React.FC<WritingTaskSectionProps> = ({
         setSingleText(initialContent);
     }
   }, [initialContent]);
+
+  useEffect(() => {
+    if (initialEvaluation) {
+      setEvaluation(initialEvaluation);
+    }
+  }, [initialEvaluation]);
 
   const currentText = showHints 
     ? blocks.map(b => b.text).join('\n\n') 
@@ -150,10 +160,13 @@ ${textToProcess}
         score: score
       };
       setEvaluation(data);
+      if (onEvaluationChange) {
+        onEvaluationChange(data);
+      }
       setShowEvaluationModal(true);
       
       if (onComplete) {
-        onComplete(data.score, 10, []);
+        onComplete(data.score, 10, [data]);
       }
     } catch (error) {
       console.error("Failed to evaluate:", error);

@@ -75,35 +75,6 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
       }
   }, [history, initialMode]);
 
-  useEffect(() => {
-      if (initialInputs) {
-          setInputs(initialInputs);
-      } else if (!readOnly && !viewingResult) {
-          // Load saved progress
-          const savedInputs = loadInputs(story.title);
-          if (savedInputs) {
-              setInputs(prev => ({ ...prev, ...savedInputs }));
-              if (savedInputs.email) setEmailContent(savedInputs.email);
-          }
-
-          loadAudioAttempts(story.title).then(savedAttempts => {
-              if (savedAttempts && savedAttempts.length > 0) {
-                  const loadedAttempts = savedAttempts.map(att => ({
-                      blob: att.blob,
-                      url: URL.createObjectURL(att.blob),
-                      timestamp: att.timestamp
-                  }));
-                  setAttempts(loadedAttempts);
-                  if (loadedAttempts.length > 0) {
-                      setSpeakingPhase('REVIEW');
-                      // If we have attempts, select the first one by default
-                      setSelectedAttemptIndex(0);
-                  }
-              }
-          });
-      }
-  }, [initialInputs, story.title, readOnly, viewingResult]);
-
   // If viewingResult is present, we are in review mode
   const isReviewMode = !!viewingResult;
   const effectiveReadOnly = readOnly || isReviewMode;
@@ -302,6 +273,43 @@ const ExerciseView: React.FC<ExerciseViewProps> = ({ story, type, onBack, onComp
   const [highlightedField, setHighlightedField] = useState<string | null>(null);
   const [generatedAnswers, setGeneratedAnswers] = useState<Record<number, string>>({});
   const [isGeneratingAnswer, setIsGeneratingAnswer] = useState<Record<number, boolean>>({});
+
+  useEffect(() => {
+    if (aiFeedback && !readOnly && !viewingResult) {
+        const currentInputs = loadInputs(story.title) || {};
+        saveInputs(story.title, { ...currentInputs, aiFeedback });
+    }
+  }, [aiFeedback, story.title, readOnly, viewingResult]);
+
+  useEffect(() => {
+      if (initialInputs) {
+          setInputs(initialInputs);
+      } else if (!readOnly && !viewingResult) {
+          // Load saved progress
+          const savedInputs = loadInputs(story.title);
+          if (savedInputs) {
+              setInputs(prev => ({ ...prev, ...savedInputs }));
+              if (savedInputs.email) setEmailContent(savedInputs.email);
+              if (savedInputs.aiFeedback) setAiFeedback(savedInputs.aiFeedback);
+          }
+
+          loadAudioAttempts(story.title).then(savedAttempts => {
+              if (savedAttempts && savedAttempts.length > 0) {
+                  const loadedAttempts = savedAttempts.map(att => ({
+                      blob: att.blob,
+                      url: URL.createObjectURL(att.blob),
+                      timestamp: att.timestamp
+                  }));
+                  setAttempts(loadedAttempts);
+                  if (loadedAttempts.length > 0) {
+                      setSpeakingPhase('REVIEW');
+                      // If we have attempts, select the first one by default
+                      setSelectedAttemptIndex(0);
+                  }
+              }
+          });
+      }
+  }, [initialInputs, story.title, readOnly, viewingResult]);
 
   const updateResultWithFeedback = async (resultId: string, updatedDetails: AttemptDetail[]) => {
     try {
@@ -1621,9 +1629,11 @@ Answer the questions in the task (in each task there's what should be said) usin
             story={story}
             userProfile={userProfile || { id: 'anonymous', name: 'Student', email: '' } as UserProfile}
             initialContent={emailContent}
+            initialEvaluation={aiFeedback}
+            onEvaluationChange={setAiFeedback}
             onContentChange={setEmailContent}
             readOnly={effectiveReadOnly}
-            onComplete={(score, maxScore) => {
+            onComplete={(score, maxScore, aiDetails) => {
               const details: AttemptDetail[] = [{
                   question: 'Email Writing Task',
                   userAnswer: emailContent,
@@ -1631,7 +1641,7 @@ Answer the questions in the task (in each task there's what should be said) usin
                   isCorrect: score >= 5,
                   context: story.text || story.emailBody,
                   wordCount: emailContent.trim() ? emailContent.trim().split(/\s+/).length : 0,
-                  aiFeedback: { score, feedback: 'Evaluated by AI' }
+                  aiFeedback: aiDetails?.[0] || { score, feedback: 'Evaluated by AI' }
               }];
               
               if (typeof window !== 'undefined') {
@@ -2510,7 +2520,7 @@ Answer the questions in the task (in each task there's what should be said) usin
       <div className="max-w-7xl mx-auto px-4">
         {isReviewMode && viewingResult ? (
             <div className="max-w-5xl mx-auto">
-                {!(type === ExerciseType.GRAMMAR || type === ExerciseType.VOCABULARY) && (
+                {!(type === ExerciseType.GRAMMAR || type === ExerciseType.VOCABULARY || type === ExerciseType.WRITING || type === ExerciseType.SPEAKING || type === ExerciseType.ORAL_SPEECH) && (
                     <div className="mb-10">
                         <ResultReview 
                             details={viewingResult.details} 
@@ -2523,13 +2533,13 @@ Answer the questions in the task (in each task there's what should be said) usin
                 <div className="space-y-6">
                     {(type === ExerciseType.GRAMMAR || type === ExerciseType.VOCABULARY) ? (
                         renderGrammarTemplate()
+                    ) : (type === ExerciseType.WRITING || type === ExerciseType.SPEAKING || type === ExerciseType.ORAL_SPEECH) ? (
+                        <>
+                            {type === ExerciseType.WRITING && renderWritingLayout()}
+                            {(type === ExerciseType.SPEAKING || type === ExerciseType.ORAL_SPEECH) && renderSpeaking()}
+                        </>
                     ) : (
                         <div className="bg-white p-8 md:p-12 rounded-3xl shadow-sm border border-slate-100">
-                            {type === ExerciseType.WRITING && (
-                                <div className="prose prose-slate max-w-none">
-                                    <p className="whitespace-pre-wrap leading-relaxed text-lg text-slate-700">{story.emailBody}</p>
-                                </div>
-                            )}
                             {type === ExerciseType.READING && (story.questions ? renderTrueFalse() : renderReadingMatching())}
                             {type === ExerciseType.LISTENING && renderListening()}
                         </div>
